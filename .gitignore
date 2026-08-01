@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.db
+data/
+backend/models/
+backend/data/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+*.log
+.idea/
+.vscode/
