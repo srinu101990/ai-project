@@ -25,44 +25,44 @@ SEVERITY_BY_TYPE = {
 }
 
 PHISHING_PATTERNS = [
-    r"verify\s+(your\s+)?account",
-    r"urgent\s+action\s+required",
-    r"click\s+(here|below|the\s+link)",
-    r"password\s+(reset|expire|expired)",
-    r"login\s+(portal|page|now)",
-    r"suspicious\s+login",
-    r"bank\s+account",
-    r"update\s+(billing|payment)",
-    r"http[s]?://[^\s]*login",
-    r"credential",
+    (r"verify\s+(your\s+)?account", "verify account"),
+    (r"urgent\s+action\s+required", "urgent action required"),
+    (r"click\s+(here|below|the\s+link)", "click-through lure"),
+    (r"password\s+(reset|expire|expired)", "password reset lure"),
+    (r"login\s+(portal|page|now)", "login portal lure"),
+    (r"suspicious\s+login", "suspicious login"),
+    (r"bank\s+account", "bank account mention"),
+    (r"update\s+(billing|payment)", "billing update lure"),
+    (r"http[s]?://[^\s]*login", "login URL"),
+    (r"credential", "credential harvest"),
 ]
 
 MALWARE_PATTERNS = [
-    r"executable\s+download",
-    r"\.exe\b",
-    r"powershell\s+-enc",
-    r"base64\s+payload",
-    r"reverse\s+shell",
-    r"c2\s+beacon",
-    r"trojan",
-    r"worm\b",
-    r"dropper",
-    r"suspicious\s+process",
-    r"registry\s+persistence",
-    r"dll\s+injection",
+    (r"executable\s+download", "executable download"),
+    (r"\.exe\b", "exe artifact"),
+    (r"powershell\s+-enc", "encoded PowerShell"),
+    (r"base64\s+payload", "base64 payload"),
+    (r"reverse\s+shell", "reverse shell"),
+    (r"c2\s+beacon", "C2 beacon"),
+    (r"trojan", "trojan"),
+    (r"worm\b", "worm"),
+    (r"dropper", "dropper"),
+    (r"suspicious\s+process", "suspicious process"),
+    (r"registry\s+persistence", "registry persistence"),
+    (r"dll\s+injection", "DLL injection"),
 ]
 
 RANSOMWARE_PATTERNS = [
-    r"encrypt(ed|ion)?\s+(files|documents|drive)",
-    r"ransom",
-    r"bitcoin\s+wallet",
-    r"decrypt(ion)?\s+key",
-    r"\.locked\b",
-    r"your\s+files\s+have\s+been",
-    r"pay\s+(in\s+)?crypto",
-    r"file\s+encryption\s+started",
-    r"shadow\s+copies\s+deleted",
-    r"readme_for_decrypt",
+    (r"encrypt(ed|ion)?\s+(files|documents|drive)", "file encryption"),
+    (r"ransom", "ransom demand"),
+    (r"bitcoin\s+wallet", "bitcoin wallet"),
+    (r"decrypt(ion)?\s+key", "decryption key"),
+    (r"\.locked\b", "locked file extension"),
+    (r"your\s+files\s+have\s+been", "files encrypted notice"),
+    (r"pay\s+(in\s+)?crypto", "crypto payment demand"),
+    (r"file\s+encryption\s+started", "encryption started"),
+    (r"shadow\s+copies\s+deleted", "shadow copies deleted"),
+    (r"readme_for_decrypt", "decrypt readme note"),
 ]
 
 
@@ -74,12 +74,12 @@ class ClassificationResult:
     indicators: list[str]
 
 
-def _rule_score(text: str, patterns: Iterable[str]) -> tuple[float, list[str]]:
+def _rule_score(text: str, patterns: Iterable[tuple[str, str]]) -> tuple[float, list[str]]:
     hits: list[str] = []
     lowered = text.lower()
-    for pattern in patterns:
+    for pattern, label in patterns:
         if re.search(pattern, lowered):
-            hits.append(pattern)
+            hits.append(label)
     score = min(1.0, len(hits) / 3.0)
     return score, hits
 
