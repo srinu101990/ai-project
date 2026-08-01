@@ -1,12 +1,19 @@
-"""FastAPI application for the AI Cyber Threat Intelligence Dashboard."""
+"""FastAPI application for the AI Cyber Threat Intelligence Dashboard.
+
+Fully offline-capable: local SQLite, local AI model, local fonts in the UI,
+bundled Swagger assets, and optional serving of the built React frontend.
+"""
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from .classifier import classifier
@@ -26,6 +33,12 @@ from .schemas import (
     ThreatEventOut,
 )
 
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = BACKEND_ROOT.parent
+STATIC_DIR = BACKEND_ROOT / "static"
+SWAGGER_DIR = STATIC_DIR / "swagger"
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+
 
 def seed_if_empty(db: Session) -> None:
     count = db.query(ThreatEvent).count()
@@ -36,7 +49,7 @@ def seed_if_empty(db: Session) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
-    # Ensure classifier model is warm.
+    # Ensure classifier model is warm (trained/loaded locally).
     _ = classifier.classify("warmup benign traffic sample")
     from .database import SessionLocal
 
@@ -52,10 +65,13 @@ app = FastAPI(
     title="AI Cyber Threat Intelligence Dashboard",
     description=(
         "Collects network cyber threat data, classifies phishing/malware/ransomware "
-        "with AI, visualizes real-time stats, and generates decision-support reports."
+        "with AI, visualizes real-time stats, and generates decision-support reports. "
+        "Runs fully offline after dependencies are installed."
     ),
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
 )
 
 app.add_middleware(
@@ -66,10 +82,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+if SWAGGER_DIR.exists():
+    app.mount("/static/swagger", StaticFiles(directory=str(SWAGGER_DIR)), name="swagger")
+
+
+@app.get("/docs", include_in_schema=False)
+def offline_swagger_ui():
+    """Swagger UI served from local static files (no CDN)."""
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} — Docs (Offline)",
+        swagger_js_url="/static/swagger/swagger-ui-bundle.js",
+        swagger_css_url="/static/swagger/swagger-ui.css",
+        swagger_favicon_url="/favicon.svg",
+    )
+
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "cyber-threat-intel"}
+    return {
+        "status": "ok",
+        "service": "cyber-threat-intel",
+        "offline_mode": True,
+        "frontend_bundled": FRONTEND_DIST.exists(),
+    }
 
 
 @app.get("/api/threats", response_model=list[ThreatEventOut])
@@ -158,3 +194,55 @@ def report_pdf(db: Session = Depends(get_db)):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _mount_frontend() -> None:
+    """Serve the built React app from FastAPI for single-process offline use."""
+    if not FRONTEND_DIST.exists():
+        return
+
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    fonts_dir = FRONTEND_DIST / "fonts"
+    if fonts_dir.exists():
+        app.mount("/fonts", StaticFiles(directory=str(fonts_dir)), name="fonts")
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    def favicon():
+        path = FRONTEND_DIST / "favicon.svg"
+        if path.exists():
+            return FileResponse(path)
+        raise HTTPException(status_code=404, detail="favicon not found")
+
+    @app.get("/", include_in_schema=False)
+    def spa_index():
+        index = FRONTEND_DIST / "index.html"
+        return FileResponse(index)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        # Never hijack API, docs, or static swagger routes.
+        blocked = (
+            "api/",
+            "static/",
+            "docs",
+            "openapi.json",
+            "redoc",
+        )
+        if full_path.startswith(blocked) or full_path in {"docs", "openapi.json", "redoc"}:
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = FRONTEND_DIST / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        index = FRONTEND_DIST / "index.html"
+        if index.exists():
+            return FileResponse(index)
+        return HTMLResponse(
+            "<h1>Frontend build missing</h1><p>Run <code>npm run build</code> in frontend/.</p>",
+            status_code=404,
+        )
+
+
+_mount_frontend()

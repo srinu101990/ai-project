@@ -1,3 +1,61 @@
+/* Local fonts — no CDN / internet required */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('/fonts/outfit-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('/fonts/outfit-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('/fonts/outfit-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('/fonts/outfit-latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 800;
+  src: url('/fonts/outfit-latin-800-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('/fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('/fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('/fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+}
+
 :root {
   --bg-deep: #07151a;
   --bg-panel: rgba(12, 35, 42, 0.82);
@@ -12,8 +70,8 @@
   --rose: #f43f5e;
   --sky: #38bdf8;
   --ok: #34d399;
-  --font-display: 'Outfit', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+  --font-display: 'Outfit', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
   --radius: 14px;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
 }

@@ -2,6 +2,8 @@
 
 Full-stack project that **collects** cyber threat data from network sources, **classifies** threats with AI (phishing, malware, ransomware), shows **real-time charts**, and **generates PDF reports** for security decision-making.
 
+**Works fully offline** after the first dependency install — no cloud APIs, no CDN fonts, no external threat feeds at runtime.
+
 ## Features
 
 | Requirement | Implementation |
@@ -10,16 +12,42 @@ Full-stack project that **collects** cyber threat data from network sources, **c
 | AI Classification | Hybrid ML (TF-IDF + Logistic Regression) + explainable rule indicators |
 | Real-time Visualization | Live dashboard with timeline, pie, and severity charts |
 | Reporting | Executive summary + downloadable PDF decision report |
+| Offline mode | Local fonts, local AI model, local SQLite, bundled UI + docs |
 
 ## Project structure
 
 ```
 backend/          FastAPI API, AI classifier, collector, PDF reports
-frontend/         React (Vite) dashboard UI
+frontend/         React (Vite) dashboard UI + local fonts
+frontend/dist/    Prebuilt offline UI (served by FastAPI)
+start-offline.sh  One-command offline launcher (Linux/macOS)
+start-offline.bat One-command offline launcher (Windows)
 data/             SQLite DB + generated PDF reports (created at runtime)
 ```
 
-## Quick start
+## Offline quick start (recommended)
+
+### Linux / macOS
+
+```bash
+chmod +x start-offline.sh
+./start-offline.sh
+```
+
+### Windows
+
+```bat
+start-offline.bat
+```
+
+Then open:
+
+- **Dashboard:** http://127.0.0.1:8000
+- **API docs:** http://127.0.0.1:8000/docs
+
+No internet is required while the app is running. Internet is only needed the **first time** you install Python/Node packages (or if `frontend/dist` is missing and must be rebuilt).
+
+## Development mode (two terminals)
 
 ### 1. Backend
 
@@ -28,11 +56,10 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python run.py
+python run.py --reload
 ```
 
-API runs at **http://127.0.0.1:8000**  
-Docs: **http://127.0.0.1:8000/docs**
+API: **http://127.0.0.1:8000**
 
 ### 2. Frontend
 
@@ -42,7 +69,16 @@ npm install
 npm run dev
 ```
 
-Dashboard: **http://127.0.0.1:5173**
+Dashboard (dev): **http://127.0.0.1:5173**
+
+## What makes it offline
+
+- Threat collection is local/simulated multi-source telemetry (no live internet feeds)
+- AI model trains and runs entirely on-device with scikit-learn
+- SQLite database stored under `data/`
+- Fonts are bundled in `frontend/public/fonts` (no Google Fonts CDN)
+- Swagger UI assets are bundled in `backend/static/swagger` (no jsDelivr CDN)
+- Built React app is served by FastAPI from `frontend/dist`
 
 ## Main API endpoints
 
@@ -60,8 +96,11 @@ Dashboard: **http://127.0.0.1:5173**
 - **Frontend:** React, Vite, Recharts, Lucide icons
 - **Storage:** SQLite (`data/threats.db`)
 
-## Notes
+## Rebuild offline UI after frontend changes
 
-- Network collection uses realistic multi-source simulated telemetry suitable for demos and academic projects.
-- The classifier is trained on curated phishing / malware / ransomware / benign samples and persists to `backend/models/threat_classifier.joblib`.
-- Frontend auto-refreshes every 12 seconds for near real-time stats.
+```bash
+cd frontend
+npm run build
+```
+
+Then restart `./start-offline.sh` (or `python backend/run.py`).
