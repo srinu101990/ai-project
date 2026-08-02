@@ -13,9 +13,10 @@ fi
 # shellcheck disable=SC1091
 source backend/.venv/bin/activate
 
-if ! python -c "import fastapi" >/dev/null 2>&1; then
+if ! python -c "import fastapi, uvicorn" >/dev/null 2>&1; then
   echo "Installing Python dependencies (needs internet the first time only)..."
-  pip install -r backend/requirements.txt
+  python -m pip install --upgrade pip
+  python -m pip install -r backend/requirements.txt
 fi
 
 if [[ ! -d frontend/dist ]]; then

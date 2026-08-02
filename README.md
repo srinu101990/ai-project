@@ -40,12 +40,26 @@ chmod +x start-offline.sh
 start-offline.bat
 ```
 
+If an old failed install left a broken environment, delete `backend\.venv` first, then run `start-offline.bat` again.
+
 Then open:
 
 - **Dashboard:** http://127.0.0.1:8000
 - **API docs:** http://127.0.0.1:8000/docs
 
 No internet is required while the app is running. Internet is only needed the **first time** you install Python/Node packages (or if `frontend/dist` is missing and must be rebuilt).
+
+### Windows manual install (if needed)
+
+```bat
+cd backend
+rmdir /s /q .venv
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python run.py
+```
 
 ## Development mode (two terminals)
 
