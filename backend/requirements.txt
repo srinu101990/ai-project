@@ -1,4 +1,5 @@
-# Core app dependencies (Windows + Linux + macOS)
+# Cross-platform dependencies (Windows + Linux + macOS)
+# Note: uvloop is intentionally omitted — it does not support Windows.
 fastapi==0.141.1
 uvicorn==0.52.0
 sqlalchemy==2.0.51
@@ -14,7 +15,3 @@ websockets==15.0.1
 watchfiles==1.1.0
 python-dotenv==1.1.1
 PyYAML==6.0.2
-
-# Optional Unix-only speedups (skipped automatically on Windows)
-uvloop==0.22.1; sys_platform != "win32"
-httptools==0.6.4; sys_platform != "win32"
