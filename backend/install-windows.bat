@@ -33,11 +33,12 @@ call .venv\Scripts\activate.bat
 echo Upgrading pip...
 python -m pip install --upgrade pip
 
-echo Installing dependencies (no uvloop)...
+echo Installing dependencies (Windows-safe packages only)...
 python -m pip install -r requirements.txt
 if errorlevel 1 (
   echo.
   echo ERROR: pip install failed.
+  echo Tip: use Python 3.11 or 3.12 from python.org (64-bit).
   pause
   exit /b 1
 )
