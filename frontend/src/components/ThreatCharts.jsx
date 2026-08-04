@@ -1,9 +1,6 @@
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
-  CartesianGrid,
   Cell,
   Pie,
   PieChart,
@@ -11,37 +8,36 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  CartesianGrid,
 } from 'recharts'
+import { Biohazard, TriangleAlert } from 'lucide-react'
 
 const TYPE_COLORS = {
-  phishing: '#f59e0b',
-  malware: '#f43f5e',
-  ransomware: '#fb7185',
-  benign: '#34d399',
+  phishing: '#f97316',
+  malware: '#ef4444',
+  ransomware: '#a855f7',
+  benign: '#22c55e',
+  ddos: '#3b82f6',
+  'brute force': '#22d3ee',
+  social: '#4ade80',
 }
 
+const SEVERITY_ORDER = ['low', 'medium', 'high', 'critical']
+
 const SEVERITY_COLORS = {
-  critical: '#f43f5e',
-  high: '#f59e0b',
-  medium: '#38bdf8',
-  low: '#34d399',
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#eab308',
+  low: '#ef4444',
 }
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div
-      style={{
-        background: '#0c232a',
-        border: '1px solid rgba(45,212,191,0.25)',
-        borderRadius: 10,
-        padding: '0.55rem 0.7rem',
-        fontSize: 12,
-      }}
-    >
-      {label ? <div style={{ marginBottom: 4, color: '#8aa8a8' }}>{label}</div> : null}
+    <div className="chart-tooltip">
+      {label ? <div className="chart-tooltip-label">{label}</div> : null}
       {payload.map((item) => (
-        <div key={item.name} style={{ color: item.color || '#e8f4f2' }}>
+        <div key={item.name} style={{ color: item.color || '#e8f0ff' }}>
           {item.name}: <strong>{item.value}</strong>
         </div>
       ))}
@@ -49,84 +45,123 @@ function ChartTooltip({ active, payload, label }) {
   )
 }
 
+function percentMap(entries) {
+  const total = entries.reduce((sum, item) => sum + item.value, 0) || 1
+  return entries.map((item) => ({
+    ...item,
+    pct: Math.round((item.value / total) * 1000) / 10,
+  }))
+}
+
 export default function ThreatCharts({ stats }) {
-  const byType = Object.entries(stats?.by_type || {}).map(([name, value]) => ({
-    name,
-    value,
+  const byType = percentMap(
+    Object.entries(stats?.by_type || {}).map(([name, value]) => ({
+      name,
+      value,
+    })),
+  )
+
+  const severityLookup = stats?.by_severity || {}
+  const bySeverity = SEVERITY_ORDER.map((name) => ({
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    key: name,
+    value: severityLookup[name] || 0,
   }))
-  const bySeverity = Object.entries(stats?.by_severity || {}).map(([name, value]) => ({
-    name,
-    value,
-  }))
-  const timeline = stats?.timeline || []
 
   return (
-    <div className="chart-pair">
-      <div className="panel section">
+    <div className="viz-grid">
+      <div className="panel section chart-panel">
         <div className="section-head">
-          <h3>Threat Timeline</h3>
-          <span>Real-time intake</span>
+          <h3>Malware / Threat Distribution</h3>
+          <span>Vector mix</span>
         </div>
-        <div className="chart-wrap">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={timeline}>
-              <defs>
-                <linearGradient id="tealFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.45} />
-                  <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
-              <XAxis dataKey="time" stroke="#8aa8a8" fontSize={11} tickLine={false} />
-              <YAxis stroke="#8aa8a8" fontSize={11} allowDecimals={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="count"
-                name="Events"
-                stroke="#2dd4bf"
-                fill="url(#tealFill)"
-                strokeWidth={2.2}
-                animationDuration={900}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div className="donut-layout">
+          <div className="donut-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={byType.length ? byType : [{ name: 'empty', value: 1 }]}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={62}
+                  outerRadius={92}
+                  paddingAngle={byType.length ? 3 : 0}
+                  stroke="rgba(5,10,24,0.85)"
+                  strokeWidth={3}
+                  animationDuration={900}
+                >
+                  {(byType.length ? byType : [{ name: 'empty' }]).map((entry) => (
+                    <Cell
+                      key={entry.name}
+                      fill={TYPE_COLORS[entry.name] || 'rgba(148,163,184,0.25)'}
+                      style={{
+                        filter: `drop-shadow(0 0 6px ${TYPE_COLORS[entry.name] || 'transparent'})`,
+                      }}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip content={<ChartTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="donut-center" aria-hidden="true">
+              <Biohazard size={28} />
+            </div>
+          </div>
+          <ul className="donut-legend">
+            {byType.length === 0 ? (
+              <li className="muted">No distribution data yet</li>
+            ) : (
+              byType.map((entry) => (
+                <li key={entry.name}>
+                  <span
+                    className="legend-swatch"
+                    style={{ background: TYPE_COLORS[entry.name] || '#38bdf8' }}
+                  />
+                  <span className="legend-name">{entry.name}</span>
+                  <span className="legend-pct mono">{entry.pct}%</span>
+                </li>
+              ))
+            )}
+          </ul>
         </div>
       </div>
 
-      <div className="panel section">
+      <div className="panel section chart-panel severity-panel">
         <div className="section-head">
-          <h3>Classification Mix</h3>
-          <span>AI threat types</span>
+          <h3>Incident Severity Density</h3>
+          <span>Risk bands</span>
         </div>
-        <div className="chart-wrap" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div className="chart-wrap severity-chart">
+          <div className="severity-ghost" aria-hidden="true">
+            <TriangleAlert size={120} strokeWidth={1} />
+          </div>
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={byType}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={48}
-                outerRadius={78}
-                paddingAngle={3}
-                animationDuration={900}
-              >
-                {byType.map((entry) => (
-                  <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || '#38bdf8'} />
-                ))}
-              </Pie>
+            <BarChart data={bySeverity} barCategoryGap="28%">
+              <CartesianGrid stroke="rgba(148,163,184,0.1)" vertical={false} />
+              <XAxis
+                dataKey="name"
+                stroke="#7b8db0"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                stroke="#7b8db0"
+                fontSize={11}
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+              />
               <Tooltip content={<ChartTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bySeverity}>
-              <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
-              <XAxis dataKey="name" stroke="#8aa8a8" fontSize={11} tickLine={false} />
-              <YAxis stroke="#8aa8a8" fontSize={11} allowDecimals={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} />
-              <Bar dataKey="value" name="Count" radius={[6, 6, 0, 0]} animationDuration={900}>
+              <Bar dataKey="value" name="Incidents" radius={[8, 8, 0, 0]} animationDuration={900}>
                 {bySeverity.map((entry) => (
-                  <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] || '#38bdf8'} />
+                  <Cell
+                    key={entry.key}
+                    fill={SEVERITY_COLORS[entry.key] || '#38bdf8'}
+                    style={{
+                      filter: `drop-shadow(0 0 8px ${SEVERITY_COLORS[entry.key] || 'transparent'})`,
+                    }}
+                  />
                 ))}
               </Bar>
             </BarChart>

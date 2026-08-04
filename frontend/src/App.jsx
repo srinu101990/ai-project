@@ -1,11 +1,32 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Activity, Radar, RefreshCw, Shield } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Activity,
+  Brain,
+  Crosshair,
+  Radar,
+  RefreshCw,
+  Shield,
+  ShieldAlert,
+  Wifi,
+} from 'lucide-react'
 import { api } from './api'
 import ThreatCharts from './components/ThreatCharts'
 import ThreatTable from './components/ThreatTable'
 import ClassifyPanel from './components/ClassifyPanel'
 import IngestPanel from './components/IngestPanel'
 import ReportPanel from './components/ReportPanel'
+import ThreatDefinitions from './components/ThreatDefinitions'
+import LogAnalyzer from './components/LogAnalyzer'
+import StatusFooter from './components/StatusFooter'
+
+function useClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return now
+}
 
 function App() {
   const [stats, setStats] = useState(null)
@@ -16,6 +37,7 @@ function App() {
   const [downloading, setDownloading] = useState(false)
   const [toast, setToast] = useState('')
   const [lastRefresh, setLastRefresh] = useState(null)
+  const now = useClock()
 
   const showToast = useCallback((message) => {
     setToast(message)
@@ -82,75 +104,121 @@ function App() {
   }
 
   const critical = stats?.by_severity?.critical || 0
-  const high = stats?.by_severity?.high || 0
+  const confidencePct = stats
+    ? `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
+    : '—'
+  const dominant = summary?.top_threat_type || '—'
+  const latestThreat = useMemo(() => threats[0] || null, [threats])
+
+  const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const dateLabel = now
+    .toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    .replace(/\//g, '-')
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">
-            <Shield size={24} />
+            <Shield size={26} />
           </div>
           <div>
-            <h1>Aegis Intel</h1>
-            <p>AI-based Cyber Threat Intelligence Dashboard</p>
+            <h1>
+              CYBER_SENTINEL<span className="brand-dot">.AI</span>
+            </h1>
+            <p>AI Cyber Threat Intelligence Dashboard</p>
           </div>
         </div>
-        <div className="live-pill" title={lastRefresh ? lastRefresh.toLocaleTimeString() : ''}>
-          <span className="live-dot" />
-          Live monitoring
+
+        <div className="secure-pill" title="Fully offline-capable after install">
+          <Shield size={15} />
+          Secure Offline Mode
+        </div>
+
+        <div className="sys-status">
+          <div className="sys-operational">
+            <span className="live-dot" />
+            Operational
+          </div>
+          <div className="sys-clock mono">
+            <span>{timeLabel}</span>
+            <span className="sys-date">{dateLabel}</span>
+          </div>
+          <Wifi size={18} className="sys-signal" />
         </div>
       </header>
 
-      <section className="hero-strip">
-        <div className="panel hero-copy">
-          <h2>Collect, classify, and act on cyber threats in one operational view.</h2>
-          <p>
-            Network telemetry is scored by an AI model for phishing, malware, and ransomware —
-            then surfaced with real-time charts and decision-ready reporting.
-          </p>
-          <div className="hero-actions">
-            <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
-              <Radar size={16} />
-              {collecting ? 'Scanning network…' : 'Collect from Network'}
-            </button>
-            <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
-              <RefreshCw size={16} />
-              Refresh
-            </button>
-          </div>
-        </div>
+      <ThreatDefinitions />
 
-        <div className="panel stat-grid">
-          <div className="stat-card total">
-            <div className="stat-label">Total Threats</div>
+      <section className="kpi-row" aria-label="Summary metrics">
+        <article className="kpi-card panel total">
+          <div className="kpi-icon">
+            <Shield size={22} />
+          </div>
+          <div>
+            <div className="stat-label">Total Threats Ingested</div>
             <div className="stat-value">{stats?.total_threats ?? '—'}</div>
           </div>
-          <div className="stat-card open">
-            <div className="stat-label">Open Cases</div>
-            <div className="stat-value">{stats?.open_threats ?? '—'}</div>
+        </article>
+        <article className="kpi-card panel critical">
+          <div className="kpi-icon">
+            <ShieldAlert size={22} />
           </div>
-          <div className="stat-card critical">
-            <div className="stat-label">Critical</div>
+          <div>
+            <div className="stat-label">Critical Incidents</div>
             <div className="stat-value">{critical}</div>
           </div>
-          <div className="stat-card high">
-            <div className="stat-label">High</div>
-            <div className="stat-value">{high}</div>
+        </article>
+        <article className="kpi-card panel dominant">
+          <div className="kpi-icon">
+            <Crosshair size={22} />
           </div>
-        </div>
+          <div>
+            <div className="stat-label">Dominant Vector</div>
+            <div className="stat-value text-value">{dominant}</div>
+          </div>
+        </article>
+        <article className="kpi-card panel confidence">
+          <div className="kpi-icon">
+            <Brain size={22} />
+          </div>
+          <div>
+            <div className="stat-label">AI Model Confidence</div>
+            <div className="stat-value">{confidencePct}</div>
+          </div>
+        </article>
       </section>
 
-      <ThreatCharts stats={stats || { timeline: [], by_type: {}, by_severity: {} }} />
+      <section className="action-bar">
+        <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
+          <Radar size={16} />
+          {collecting ? 'Scanning network…' : 'Collect from Network'}
+        </button>
+        <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
+          <RefreshCw size={16} className={loading ? 'spin' : undefined} />
+          Refresh Intel
+        </button>
+        <span className="action-hint mono">
+          Open cases: {stats?.open_threats ?? '—'} · High severity:{' '}
+          {stats?.by_severity?.high ?? 0}
+        </span>
+      </section>
 
-      <section className="layout-grid" style={{ marginTop: '1rem' }}>
+      <section className="intel-row">
+        <LogAnalyzer threat={latestThreat} />
+        <ThreatCharts stats={stats || { timeline: [], by_type: {}, by_severity: {} }} />
+      </section>
+
+      <section className="layout-grid">
         <div className="panel section">
           <div className="section-head">
             <h3>Live Threat Feed</h3>
             <span>
               <Activity size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
-              Avg confidence{' '}
-              {stats ? `${Math.round((stats.recent_confidence_avg || 0) * 100)}%` : '—'}
+              Stream synced{' '}
+              {lastRefresh
+                ? lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '—'}
             </span>
           </div>
           <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
@@ -166,6 +234,8 @@ function App() {
         <ClassifyPanel onToast={showToast} />
         <IngestPanel onIngested={refresh} onToast={showToast} />
       </section>
+
+      <StatusFooter lastRefresh={lastRefresh} onRefresh={refresh} loading={loading} />
 
       {toast ? <div className="toast">{toast}</div> : null}
     </div>
