@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Activity,
   Brain,
@@ -108,7 +108,7 @@ function App() {
     ? `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
     : '—'
   const dominant = summary?.top_threat_type || '—'
-  const latestThreat = useMemo(() => threats[0] || null, [threats])
+  const latestThreat = threats[0] || null
 
   const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const dateLabel = now
