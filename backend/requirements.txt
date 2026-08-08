@@ -1,11 +1,11 @@
-# Minimal cross-platform dependencies (Windows-friendly, no C++/Rust build needed)
-fastapi==0.141.1
-uvicorn==0.52.0
-sqlalchemy==2.0.51
-pydantic==2.13.4
-python-multipart==0.0.32
-reportlab==5.0.0
-scikit-learn==1.9.0
-joblib==1.5.3
-numpy==2.5.1
-aiofiles==25.1.0
+# Compatible with Python 3.10, 3.11, and 3.12 (Windows/Linux/macOS)
+fastapi==0.115.12
+uvicorn==0.34.2
+sqlalchemy==2.0.40
+pydantic==2.11.3
+python-multipart==0.0.20
+reportlab==4.4.0
+scikit-learn==1.6.1
+joblib==1.4.2
+numpy==1.26.4
+aiofiles==24.1.0

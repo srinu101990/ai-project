@@ -55,7 +55,8 @@ exit /b 1
 
 :pip_fail
 echo ERROR: pip install failed.
-echo Use Python 3.11 or 3.12 64-bit from python.org
+echo Recommended: Python 3.10, 3.11, or 3.12 64-bit from python.org
+echo Check version with: python --version
 pause
 exit /b 1
 
