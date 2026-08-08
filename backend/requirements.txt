@@ -1,0 +1,11 @@
+# Compatible with Python 3.10, 3.11, and 3.12 (Windows/Linux/macOS)
+fastapi==0.115.12
+uvicorn==0.34.2
+sqlalchemy==2.0.40
+pydantic==2.11.3
+python-multipart==0.0.20
+reportlab==4.4.0
+scikit-learn==1.6.1
+joblib==1.4.2
+numpy==1.26.4
+aiofiles==24.1.0
