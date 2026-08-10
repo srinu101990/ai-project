@@ -91,3 +91,24 @@ class ReportSummary(BaseModel):
     recommendations: list[str]
     by_type: dict[str, int]
     by_severity: dict[str, int]
+
+
+class MonitorStatus(BaseModel):
+    enabled: bool
+    scanning: bool
+    interval_seconds: int
+    batch_size: int
+    cycles_completed: int
+    last_started_at: Optional[datetime] = None
+    last_finished_at: Optional[datetime] = None
+    last_events_collected: int = 0
+    last_message: Optional[str] = None
+    last_error: Optional[str] = None
+    last_mode: Optional[str] = None
+    last_subnet: Optional[str] = None
+    last_local_ip: Optional[str] = None
+    collection_mode: str
+
+
+class MonitorControlRequest(BaseModel):
+    interval_seconds: Optional[int] = Field(default=None, ge=15, le=3600)

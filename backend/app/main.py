@@ -21,6 +21,7 @@ from .collector import collect_from_network, ingest_event
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
 from .models import ThreatEvent
+from .monitor import autostart_monitor, monitor
 from .network_scanner import resolve_scan_network
 from .report import build_report_summary, generate_pdf_report, get_stats
 from .schemas import (
@@ -29,6 +30,8 @@ from .schemas import (
     CollectRequest,
     CollectResponse,
     IngestRequest,
+    MonitorControlRequest,
+    MonitorStatus,
     ReportSummary,
     StatsResponse,
     StatusUpdate,
@@ -60,7 +63,12 @@ async def lifespan(_: FastAPI):
         seed_if_empty(db)
     finally:
         db.close()
-    yield
+    # Start continuous LAN monitoring in the background.
+    autostart_monitor()
+    try:
+        yield
+    finally:
+        monitor.stop()
 
 
 app = FastAPI(
@@ -109,11 +117,16 @@ def health():
         subnet = str(network)
     except Exception:
         pass
+    mon = monitor.status()
     return {
         "status": "ok",
         "service": "cyber-threat-intel",
         "collection_mode": COLLECTION_MODE,
         "network_detection": COLLECTION_MODE == "network",
+        "continuous_monitoring": mon.get("enabled", False),
+        "monitor_scanning": mon.get("scanning", False),
+        "monitor_interval_seconds": mon.get("interval_seconds"),
+        "monitor_last_message": mon.get("last_message"),
         "offline_capable": True,
         "bind_host": BIND_HOST,
         "bind_port": BIND_PORT,
@@ -121,6 +134,21 @@ def health():
         "scan_subnet": subnet,
         "frontend_bundled": FRONTEND_DIST.exists(),
     }
+
+
+@app.get("/api/monitor", response_model=MonitorStatus)
+def monitor_status():
+    return monitor.status()
+
+
+@app.post("/api/monitor/start", response_model=MonitorStatus)
+def monitor_start(payload: MonitorControlRequest = MonitorControlRequest()):
+    return monitor.start(interval_seconds=payload.interval_seconds)
+
+
+@app.post("/api/monitor/stop", response_model=MonitorStatus)
+def monitor_stop():
+    return monitor.stop()
 
 
 @app.get("/api/threats", response_model=list[ThreatEventOut])

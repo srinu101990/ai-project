@@ -3,6 +3,8 @@ import {
   Activity,
   Brain,
   Crosshair,
+  PauseCircle,
+  PlayCircle,
   Radar,
   RefreshCw,
   Shield,
@@ -38,6 +40,8 @@ function App() {
   const [toast, setToast] = useState('')
   const [lastRefresh, setLastRefresh] = useState(null)
   const [health, setHealth] = useState(null)
+  const [monitor, setMonitor] = useState(null)
+  const [monitorBusy, setMonitorBusy] = useState(false)
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -47,16 +51,18 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [statsData, threatData, reportData, healthData] = await Promise.all([
+      const [statsData, threatData, reportData, healthData, monitorData] = await Promise.all([
         api.getStats(),
         api.getThreats({ limit: 40 }),
         api.reportSummary(),
         api.health().catch(() => null),
+        api.monitorStatus().catch(() => null),
       ])
       setStats(statsData)
       setThreats(threatData)
       setSummary(reportData)
       if (healthData) setHealth(healthData)
+      if (monitorData) setMonitor(monitorData)
       setLastRefresh(new Date())
     } catch (err) {
       showToast(err.message || 'Failed to load dashboard data')
@@ -67,9 +73,35 @@ function App() {
 
   useEffect(() => {
     refresh()
-    const timer = window.setInterval(refresh, 12000)
+    // Refresh often so continuous monitor results appear without a click.
+    const timer = window.setInterval(refresh, 5000)
     return () => window.clearInterval(timer)
   }, [refresh])
+
+  useEffect(() => {
+    // Ensure continuous monitoring is running when the dashboard loads.
+    let cancelled = false
+    ;(async () => {
+      try {
+        const status = await api.monitorStatus()
+        if (cancelled) return
+        if (!status.enabled) {
+          const started = await api.startMonitor()
+          if (!cancelled) {
+            setMonitor(started)
+            showToast('Continuous network monitoring started')
+          }
+        } else {
+          setMonitor(status)
+        }
+      } catch {
+        // Backend may still be starting; the poll loop will retry.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [showToast])
 
   async function handleCollect() {
     setCollecting(true)
@@ -88,6 +120,26 @@ function App() {
       showToast(err.message || 'Network scan failed')
     } finally {
       setCollecting(false)
+    }
+  }
+
+  async function handleToggleMonitor() {
+    setMonitorBusy(true)
+    try {
+      if (monitor?.enabled) {
+        const stopped = await api.stopMonitor()
+        setMonitor(stopped)
+        showToast('Continuous monitoring paused')
+      } else {
+        const started = await api.startMonitor()
+        setMonitor(started)
+        showToast('Continuous monitoring resumed')
+      }
+      await refresh()
+    } catch (err) {
+      showToast(err.message || 'Could not update monitor')
+    } finally {
+      setMonitorBusy(false)
     }
   }
 
@@ -141,15 +193,23 @@ function App() {
         </div>
 
         <div
-          className="secure-pill network-pill"
+          className={`secure-pill network-pill ${monitor?.enabled ? 'monitoring' : ''}`}
           title={
-            health?.scan_subnet
-              ? `Live LAN detection on ${health.scan_subnet}`
-              : 'Live LAN host/port/connection detection'
+            monitor?.enabled
+              ? `Continuous monitoring every ${monitor.interval_seconds}s`
+              : health?.scan_subnet
+                ? `Live LAN detection on ${health.scan_subnet}`
+                : 'Live LAN host/port/connection detection'
           }
         >
           <Wifi size={15} />
-          {health?.network_detection === false ? 'Simulated Mode' : 'Network Detection'}
+          {monitor?.enabled
+            ? monitor.scanning
+              ? 'Monitoring · Scanning…'
+              : 'Continuous Monitoring'
+            : health?.network_detection === false
+              ? 'Simulated Mode'
+              : 'Network Detection'}
           {health?.local_ip ? ` · ${health.local_ip}` : ''}
         </div>
 
@@ -208,18 +268,33 @@ function App() {
       </section>
 
       <section className="action-bar">
+        <button
+          className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
+          onClick={handleToggleMonitor}
+          disabled={monitorBusy}
+        >
+          {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+          {monitorBusy
+            ? 'Updating…'
+            : monitor?.enabled
+              ? 'Pause Monitoring'
+              : 'Resume Monitoring'}
+        </button>
         <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
           <Radar size={16} />
-          {collecting ? 'Scanning LAN hosts…' : 'Scan Network Threats'}
+          {collecting ? 'Scanning now…' : 'Scan Now'}
         </button>
         <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
           <RefreshCw size={16} className={loading ? 'spin' : undefined} />
           Refresh Intel
         </button>
         <span className="action-hint mono">
-          Open cases: {stats?.open_threats ?? '—'} · High severity:{' '}
-          {stats?.by_severity?.high ?? 0}
-          {health?.scan_subnet ? ` · Target ${health.scan_subnet}` : ''}
+          {monitor?.enabled
+            ? `Auto-scan every ${monitor.interval_seconds}s · Cycles ${monitor.cycles_completed}`
+            : 'Monitoring paused'}
+          {' · '}
+          Open: {stats?.open_threats ?? '—'}
+          {health?.scan_subnet ? ` · ${health.scan_subnet}` : ''}
         </span>
       </section>
 
@@ -259,6 +334,7 @@ function App() {
         onRefresh={refresh}
         loading={loading}
         health={health}
+        monitor={monitor}
       />
 
       {toast ? <div className="toast">{toast}</div> : null}

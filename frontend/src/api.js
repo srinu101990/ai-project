@@ -33,6 +33,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ batch_size: batchSize, mode }),
     }),
+  monitorStatus: () => request('/monitor'),
+  startMonitor: (intervalSeconds) =>
+    request('/monitor/start', {
+      method: 'POST',
+      body: JSON.stringify(
+        intervalSeconds ? { interval_seconds: intervalSeconds } : {},
+      ),
+    }),
+  stopMonitor: () =>
+    request('/monitor/stop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   ingest: (payload) =>
     request('/ingest', {
       method: 'POST',

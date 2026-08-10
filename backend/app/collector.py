@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from .classifier import classifier
-from .config import ALLOW_SIMULATED_FALLBACK, COLLECTION_MODE
+from .config import ALLOW_SIMULATED_FALLBACK, COLLECTION_MODE, MONITOR_DEDUPE_MINUTES
 from .models import CollectionJob, ThreatEvent
 from .network_scanner import NetworkFinding, scan_network
 
@@ -53,6 +53,40 @@ def _merge_severity(model_severity: str, hint: str | None) -> str:
     if not hint:
         return model_severity
     return hint if rank.get(hint, 0) >= rank.get(model_severity, 0) else model_severity
+
+
+def _fingerprint(event: ThreatEvent) -> str:
+    return "|".join(
+        [
+            event.source or "",
+            event.source_ip or "",
+            event.destination_ip or "",
+            event.protocol or "",
+            event.threat_type or "",
+            event.severity or "",
+            (event.indicators or "")[:180],
+            (event.raw_payload or "")[:120],
+        ]
+    )
+
+
+def _is_duplicate(db: Session, event: ThreatEvent, window_minutes: int) -> bool:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    recent = (
+        db.query(ThreatEvent)
+        .filter(
+            ThreatEvent.created_at >= cutoff,
+            ThreatEvent.source == event.source,
+            ThreatEvent.source_ip == event.source_ip,
+            ThreatEvent.threat_type == event.threat_type,
+            ThreatEvent.is_simulated.is_(False),
+        )
+        .order_by(ThreatEvent.created_at.desc())
+        .limit(40)
+        .all()
+    )
+    target = _fingerprint(event)
+    return any(_fingerprint(item) == target for item in recent)
 
 
 def _event_from_finding(finding: NetworkFinding) -> ThreatEvent:
@@ -144,9 +178,16 @@ def _collect_simulated(db: Session, batch_size: int, job: CollectionJob) -> dict
     }
 
 
-def _collect_live_network(db: Session, batch_size: int, job: CollectionJob) -> dict[str, Any]:
+def _collect_live_network(
+    db: Session,
+    batch_size: int,
+    job: CollectionJob,
+    *,
+    dedupe: bool = False,
+) -> dict[str, Any]:
     report = scan_network(max_findings=max(batch_size, 8))
     created: list[ThreatEvent] = []
+    skipped_duplicates = 0
 
     # Prefer storing every live finding; only trim excess benign noise after
     # we already have enough higher-signal events.
@@ -154,6 +195,9 @@ def _collect_live_network(db: Session, batch_size: int, job: CollectionJob) -> d
     for finding in report.findings:
         event = _event_from_finding(finding)
         if event.threat_type == "benign" and non_benign >= max(3, batch_size // 2):
+            continue
+        if dedupe and _is_duplicate(db, event, MONITOR_DEDUPE_MINUTES):
+            skipped_duplicates += 1
             continue
         db.add(event)
         created.append(event)
@@ -170,10 +214,14 @@ def _collect_live_network(db: Session, batch_size: int, job: CollectionJob) -> d
         db.commit()
         return _collect_simulated(db, batch_size=min(batch_size, 6), job=job)
 
+    message = report.message
+    if dedupe and skipped_duplicates:
+        message = f"{message} ({skipped_duplicates} duplicate finding(s) skipped)"
+
     job.status = "completed"
     job.sources_scanned = report.hosts_scanned
     job.events_collected = len(created)
-    job.message = report.message
+    job.message = message
     job.finished_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -199,6 +247,7 @@ def collect_from_network(
     db: Session,
     batch_size: int = 8,
     mode: str | None = None,
+    dedupe: bool = False,
 ) -> dict[str, Any]:
     """Collect threat telemetry from the live network (default) or simulated sources."""
     selected = (mode or COLLECTION_MODE or "network").strip().lower()
@@ -220,7 +269,7 @@ def collect_from_network(
     try:
         if selected == "simulated":
             return _collect_simulated(db, batch_size, job)
-        return _collect_live_network(db, batch_size, job)
+        return _collect_live_network(db, batch_size, job, dedupe=dedupe)
     except Exception as exc:  # pragma: no cover - defensive
         job.status = "failed"
         job.message = str(exc)

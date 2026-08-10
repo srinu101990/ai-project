@@ -50,7 +50,10 @@ Then open:
 - **Other devices on your LAN:** http://\<your-lan-ip\>:8000
 - **API docs:** http://127.0.0.1:8000/docs
 
-Click **Scan Network Threats** on the dashboard to run a live detection pass.
+Continuous monitoring starts automatically when the server boots. The dashboard
+refreshes on its own — you do **not** need to keep clicking scan. Use **Pause
+Monitoring** / **Resume Monitoring** if you want to stop the loop, or **Scan Now**
+for an immediate extra pass.
 
 ### Optional environment variables
 
@@ -61,6 +64,9 @@ Click **Scan Network Threats** on the dashboard to run a live detection pass.
 | `BIND_HOST` | `0.0.0.0` | HTTP bind address (LAN-reachable by default) |
 | `BIND_PORT` | `8000` | HTTP port |
 | `ALLOW_SIMULATED_FALLBACK` | `false` | If a live scan finds nothing, optionally seed demo events |
+| `MONITOR_AUTO_START` | `true` | Begin continuous LAN monitoring on startup |
+| `MONITOR_INTERVAL_SECONDS` | `45` | Seconds between automatic scans |
+| `MONITOR_BATCH_SIZE` | `12` | Max findings stored per monitor cycle |
 
 Example (simulated demo only, localhost bind):
 
@@ -107,22 +113,27 @@ Dashboard (dev): **http://127.0.0.1:5173**
 ## How network threat detection works
 
 1. Auto-detects the local IPv4 address and `/24` subnet (or `SCAN_SUBNET`)
-2. Concurrently probes nearby hosts on common discovery ports
-3. Deep-scans responsive hosts for risky services (SMB, RDP, Telnet, DB ports, etc.)
-4. Inspects local listening sockets and suspicious outbound sessions (`psutil`)
-5. Classifies each finding with the on-device AI model and stores it in SQLite
-6. Dashboard marks events as **live** (network scan / ingest) or **simulated**
+2. Continuously repeats scans in the background (default every 45 seconds)
+3. Concurrently probes nearby hosts on common discovery ports
+4. Deep-scans responsive hosts for risky services (SMB, RDP, Telnet, DB ports, etc.)
+5. Inspects local listening sockets and suspicious outbound sessions (`psutil`)
+6. Classifies each finding with the on-device AI model and stores it in SQLite
+7. Skips duplicate findings so the feed does not flood
+8. Dashboard marks events as **live** (network scan / ingest) or **simulated**
 
 No root/pcap privileges are required. This is TCP connect scanning + host connection analysis — not full packet capture.
 
 ## Main API endpoints
 
-- `POST /api/collect` — live network scan & classify (`{"batch_size":12,"mode":"network"}`)
+- `POST /api/collect` — one-shot live network scan & classify
+- `GET /api/monitor` — continuous monitor status
+- `POST /api/monitor/start` — start continuous monitoring
+- `POST /api/monitor/stop` — pause continuous monitoring
 - `POST /api/ingest` — ingest a single network event from an agent/sensor
 - `POST /api/classify` — classify arbitrary threat text
 - `GET /api/threats` — list threat events
 - `GET /api/stats` — real-time statistics for charts
-- `GET /api/health` — mode, local IP, scan subnet
+- `GET /api/health` — mode, local IP, scan subnet, monitor state
 - `GET /api/reports/summary` — decision-support summary
 - `GET /api/reports/pdf` — download PDF report
 

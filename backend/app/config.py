@@ -31,3 +31,9 @@ BIND_PORT = int(os.getenv("BIND_PORT", "8000"))
 
 # Allow falling back to simulated events only when a live scan returns zero findings.
 ALLOW_SIMULATED_FALLBACK = _env_bool("ALLOW_SIMULATED_FALLBACK", False)
+
+# Continuous monitoring (no button click required).
+MONITOR_AUTO_START = _env_bool("MONITOR_AUTO_START", True)
+MONITOR_INTERVAL_SECONDS = max(15, min(3600, int(os.getenv("MONITOR_INTERVAL_SECONDS", "45"))))
+MONITOR_BATCH_SIZE = max(4, min(50, int(os.getenv("MONITOR_BATCH_SIZE", "12"))))
+MONITOR_DEDUPE_MINUTES = max(1, min(240, int(os.getenv("MONITOR_DEDUPE_MINUTES", "20"))))
