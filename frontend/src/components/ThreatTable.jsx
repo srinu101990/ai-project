@@ -14,6 +14,7 @@ export default function ThreatTable({ threats, onStatusChange }) {
             <th>Type</th>
             <th>Severity</th>
             <th>Source</th>
+            <th>Origin</th>
             <th>IPs</th>
             <th>Confidence</th>
             <th>Status</th>
@@ -33,6 +34,11 @@ export default function ThreatTable({ threats, onStatusChange }) {
               <td>
                 <div>{threat.source}</div>
                 <div className="muted mono">{threat.protocol}</div>
+              </td>
+              <td>
+                <span className={`badge ${threat.is_simulated ? 'benign' : 'malware'}`}>
+                  {threat.is_simulated ? 'simulated' : 'live'}
+                </span>
               </td>
               <td className="mono">
                 <div>{threat.source_ip}</div>

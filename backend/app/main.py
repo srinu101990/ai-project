@@ -18,8 +18,10 @@ from sqlalchemy.orm import Session
 
 from .classifier import classifier
 from .collector import collect_from_network, ingest_event
+from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
 from .models import ThreatEvent
+from .network_scanner import resolve_scan_network
 from .report import build_report_summary, generate_pdf_report, get_stats
 from .schemas import (
     ClassifyRequest,
@@ -100,10 +102,23 @@ def offline_swagger_ui():
 
 @app.get("/api/health")
 def health():
+    subnet = SCAN_SUBNET or None
+    local_ip = None
+    try:
+        local_ip, network = resolve_scan_network()
+        subnet = str(network)
+    except Exception:
+        pass
     return {
         "status": "ok",
         "service": "cyber-threat-intel",
-        "offline_mode": True,
+        "collection_mode": COLLECTION_MODE,
+        "network_detection": COLLECTION_MODE == "network",
+        "offline_capable": True,
+        "bind_host": BIND_HOST,
+        "bind_port": BIND_PORT,
+        "local_ip": local_ip,
+        "scan_subnet": subnet,
         "frontend_bundled": FRONTEND_DIST.exists(),
     }
 
@@ -149,7 +164,11 @@ def update_threat_status(
 
 @app.post("/api/collect", response_model=CollectResponse)
 def collect_threats(payload: CollectRequest, db: Session = Depends(get_db)):
-    result = collect_from_network(db, batch_size=payload.batch_size)
+    result = collect_from_network(
+        db,
+        batch_size=payload.batch_size,
+        mode=payload.mode,
+    )
     return result
 
 

@@ -215,6 +215,17 @@ a {
   box-shadow: 0 0 16px rgba(34, 197, 94, 0.18);
 }
 
+.secure-pill.network-pill {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(14, 165, 233, 0.14);
+  color: #7dd3fc;
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.22);
+  max-width: min(420px, 46vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sys-status {
   justify-self: end;
   display: flex;

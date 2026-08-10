@@ -46,6 +46,11 @@ class ClassifyResponse(BaseModel):
 
 class CollectRequest(BaseModel):
     batch_size: int = Field(default=8, ge=1, le=50)
+    mode: Optional[str] = Field(
+        default=None,
+        description="Collection mode override: 'network' (live LAN scan) or 'simulated'.",
+        pattern="^(network|simulated)$",
+    )
 
 
 class CollectResponse(BaseModel):
@@ -54,6 +59,11 @@ class CollectResponse(BaseModel):
     sources_scanned: int
     events_collected: int
     message: str
+    mode: str = "network"
+    subnet: Optional[str] = None
+    local_ip: Optional[str] = None
+    hosts_alive: Optional[int] = None
+    open_ports: Optional[int] = None
     events: list[ThreatEventOut]
 
 

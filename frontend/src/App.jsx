@@ -37,23 +37,26 @@ function App() {
   const [downloading, setDownloading] = useState(false)
   const [toast, setToast] = useState('')
   const [lastRefresh, setLastRefresh] = useState(null)
+  const [health, setHealth] = useState(null)
   const now = useClock()
 
   const showToast = useCallback((message) => {
     setToast(message)
-    window.setTimeout(() => setToast(''), 3200)
+    window.setTimeout(() => setToast(''), 4200)
   }, [])
 
   const refresh = useCallback(async () => {
     try {
-      const [statsData, threatData, reportData] = await Promise.all([
+      const [statsData, threatData, reportData, healthData] = await Promise.all([
         api.getStats(),
         api.getThreats({ limit: 40 }),
         api.reportSummary(),
+        api.health().catch(() => null),
       ])
       setStats(statsData)
       setThreats(threatData)
       setSummary(reportData)
+      if (healthData) setHealth(healthData)
       setLastRefresh(new Date())
     } catch (err) {
       showToast(err.message || 'Failed to load dashboard data')
@@ -71,11 +74,18 @@ function App() {
   async function handleCollect() {
     setCollecting(true)
     try {
-      const result = await api.collect(10)
-      showToast(result.message || `Collected ${result.events_collected} events`)
+      const result = await api.collect(12, 'network')
+      const detail = [
+        result.message || `Collected ${result.events_collected} events`,
+        result.subnet ? `subnet ${result.subnet}` : null,
+        typeof result.hosts_alive === 'number' ? `${result.hosts_alive} host(s)` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+      showToast(detail)
       await refresh()
     } catch (err) {
-      showToast(err.message || 'Collection failed')
+      showToast(err.message || 'Network scan failed')
     } finally {
       setCollecting(false)
     }
@@ -130,9 +140,17 @@ function App() {
           </div>
         </div>
 
-        <div className="secure-pill" title="Fully offline-capable after install">
-          <Shield size={15} />
-          Secure Offline Mode
+        <div
+          className="secure-pill network-pill"
+          title={
+            health?.scan_subnet
+              ? `Live LAN detection on ${health.scan_subnet}`
+              : 'Live LAN host/port/connection detection'
+          }
+        >
+          <Wifi size={15} />
+          {health?.network_detection === false ? 'Simulated Mode' : 'Network Detection'}
+          {health?.local_ip ? ` · ${health.local_ip}` : ''}
         </div>
 
         <div className="sys-status">
@@ -192,7 +210,7 @@ function App() {
       <section className="action-bar">
         <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
           <Radar size={16} />
-          {collecting ? 'Scanning network…' : 'Collect from Network'}
+          {collecting ? 'Scanning LAN hosts…' : 'Scan Network Threats'}
         </button>
         <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
           <RefreshCw size={16} className={loading ? 'spin' : undefined} />
@@ -201,6 +219,7 @@ function App() {
         <span className="action-hint mono">
           Open cases: {stats?.open_threats ?? '—'} · High severity:{' '}
           {stats?.by_severity?.high ?? 0}
+          {health?.scan_subnet ? ` · Target ${health.scan_subnet}` : ''}
         </span>
       </section>
 
@@ -235,7 +254,12 @@ function App() {
         <IngestPanel onIngested={refresh} onToast={showToast} />
       </section>
 
-      <StatusFooter lastRefresh={lastRefresh} onRefresh={refresh} loading={loading} />
+      <StatusFooter
+        lastRefresh={lastRefresh}
+        onRefresh={refresh}
+        loading={loading}
+        health={health}
+      />
 
       {toast ? <div className="toast">{toast}</div> : null}
     </div>

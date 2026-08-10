@@ -28,10 +28,10 @@ export const api = {
     return request(`/threats${qs ? `?${qs}` : ''}`)
   },
   getStats: () => request('/stats'),
-  collect: (batchSize = 8) =>
+  collect: (batchSize = 8, mode = 'network') =>
     request('/collect', {
       method: 'POST',
-      body: JSON.stringify({ batch_size: batchSize }),
+      body: JSON.stringify({ batch_size: batchSize, mode }),
     }),
   ingest: (payload) =>
     request('/ingest', {

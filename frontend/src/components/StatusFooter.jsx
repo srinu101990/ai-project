@@ -1,18 +1,24 @@
 import {
-  CloudSun,
-  Database,
   Activity,
-  ShieldCheck,
-  RefreshCw,
   Cpu,
+  Database,
+  Network,
+  RefreshCw,
+  ShieldCheck,
 } from 'lucide-react'
 
-export default function StatusFooter({ lastRefresh, onRefresh, loading }) {
+export default function StatusFooter({ lastRefresh, onRefresh, loading, health }) {
+  const modeLabel =
+    health?.network_detection === false ? 'Simulated Collection' : 'Live Network Detection'
+  const subnet = health?.scan_subnet || 'auto subnet'
+
   return (
     <footer className="status-footer panel">
       <div className="footer-weather">
-        <CloudSun size={18} />
-        <span>27°C Partly Sunny</span>
+        <Network size={18} />
+        <span>
+          {modeLabel} · {subnet}
+        </span>
       </div>
 
       <div className="footer-badges">
