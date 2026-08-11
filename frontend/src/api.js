@@ -46,6 +46,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  demoFeedStatus: () => request('/demo-feed'),
+  startDemoFeed: (intervalSeconds = 30) =>
+    request('/demo-feed/start', {
+      method: 'POST',
+      body: JSON.stringify({ interval_seconds: intervalSeconds }),
+    }),
+  stopDemoFeed: () =>
+    request('/demo-feed/stop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   ingest: (payload) =>
     request('/ingest', {
       method: 'POST',

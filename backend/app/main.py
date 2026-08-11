@@ -20,6 +20,7 @@ from .classifier import classifier
 from .collector import collect_from_network, ingest_event
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
+from .demo_feed import autostart_demo_feed, demo_feed
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .network_scanner import resolve_scan_network
@@ -29,6 +30,8 @@ from .schemas import (
     ClassifyResponse,
     CollectRequest,
     CollectResponse,
+    DemoFeedControlRequest,
+    DemoFeedStatus,
     IngestRequest,
     MonitorControlRequest,
     MonitorStatus,
@@ -65,9 +68,12 @@ async def lifespan(_: FastAPI):
         db.close()
     # Start continuous LAN monitoring in the background.
     autostart_monitor()
+    # Optional demo feeder for presentation (off by default).
+    autostart_demo_feed()
     try:
         yield
     finally:
+        demo_feed.stop()
         monitor.stop()
 
 
@@ -118,6 +124,7 @@ def health():
     except Exception:
         pass
     mon = monitor.status()
+    demo = demo_feed.status()
     return {
         "status": "ok",
         "service": "cyber-threat-intel",
@@ -127,6 +134,8 @@ def health():
         "monitor_scanning": mon.get("scanning", False),
         "monitor_interval_seconds": mon.get("interval_seconds"),
         "monitor_last_message": mon.get("last_message"),
+        "demo_feed_enabled": demo.get("enabled", False),
+        "demo_feed_interval_seconds": demo.get("interval_seconds"),
         "offline_capable": True,
         "bind_host": BIND_HOST,
         "bind_port": BIND_PORT,
@@ -149,6 +158,21 @@ def monitor_start(payload: MonitorControlRequest = MonitorControlRequest()):
 @app.post("/api/monitor/stop", response_model=MonitorStatus)
 def monitor_stop():
     return monitor.stop()
+
+
+@app.get("/api/demo-feed", response_model=DemoFeedStatus)
+def demo_feed_status():
+    return demo_feed.status()
+
+
+@app.post("/api/demo-feed/start", response_model=DemoFeedStatus)
+def demo_feed_start(payload: DemoFeedControlRequest = DemoFeedControlRequest()):
+    return demo_feed.start(interval_seconds=payload.interval_seconds or 30)
+
+
+@app.post("/api/demo-feed/stop", response_model=DemoFeedStatus)
+def demo_feed_stop():
+    return demo_feed.stop()
 
 
 @app.get("/api/threats", response_model=list[ThreatEventOut])

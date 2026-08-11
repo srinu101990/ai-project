@@ -112,3 +112,20 @@ class MonitorStatus(BaseModel):
 
 class MonitorControlRequest(BaseModel):
     interval_seconds: Optional[int] = Field(default=None, ge=15, le=3600)
+
+
+class DemoFeedStatus(BaseModel):
+    enabled: bool
+    injecting: bool
+    interval_seconds: int
+    cycles_completed: int
+    last_started_at: Optional[datetime] = None
+    last_finished_at: Optional[datetime] = None
+    last_events_collected: int = 0
+    last_message: Optional[str] = None
+    last_error: Optional[str] = None
+    last_types: list[str] = []
+
+
+class DemoFeedControlRequest(BaseModel):
+    interval_seconds: Optional[int] = Field(default=None, ge=10, le=600)

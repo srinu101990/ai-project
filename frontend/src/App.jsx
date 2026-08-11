@@ -45,6 +45,8 @@ function App() {
   const [health, setHealth] = useState(null)
   const [monitor, setMonitor] = useState(null)
   const [monitorBusy, setMonitorBusy] = useState(false)
+  const [demoFeed, setDemoFeed] = useState(null)
+  const [demoBusy, setDemoBusy] = useState(false)
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -54,18 +56,21 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [statsData, threatData, reportData, healthData, monitorData] = await Promise.all([
-        api.getStats(),
-        api.getThreats({ limit: 40 }),
-        api.reportSummary(),
-        api.health().catch(() => null),
-        api.monitorStatus().catch(() => null),
-      ])
+      const [statsData, threatData, reportData, healthData, monitorData, demoData] =
+        await Promise.all([
+          api.getStats(),
+          api.getThreats({ limit: 40 }),
+          api.reportSummary(),
+          api.health().catch(() => null),
+          api.monitorStatus().catch(() => null),
+          api.demoFeedStatus().catch(() => null),
+        ])
       setStats(statsData)
       setThreats(threatData)
       setSummary(reportData)
       if (healthData) setHealth(healthData)
       if (monitorData) setMonitor(monitorData)
+      if (demoData) setDemoFeed(demoData)
       setLastRefresh(new Date())
     } catch (err) {
       showToast(err.message || 'Failed to load dashboard data')
@@ -141,6 +146,26 @@ function App() {
       showToast(err.message || 'Could not update monitor')
     } finally {
       setMonitorBusy(false)
+    }
+  }
+
+  async function handleToggleDemoFeed() {
+    setDemoBusy(true)
+    try {
+      if (demoFeed?.enabled) {
+        const stopped = await api.stopDemoFeed()
+        setDemoFeed(stopped)
+        showToast('Demo threat feed stopped')
+      } else {
+        const started = await api.startDemoFeed(30)
+        setDemoFeed(started)
+        showToast('Demo feed started — phishing/malware/ransomware every 30s')
+      }
+      await refresh()
+    } catch (err) {
+      showToast(err.message || 'Could not update demo feed')
+    } finally {
+      setDemoBusy(false)
     }
   }
 
@@ -222,7 +247,12 @@ function App() {
       </header>
 
       <TopNav active={tab} onChange={setTab} />
-      <SystemMetaRow health={health} monitor={monitor} lastRefresh={lastRefresh} />
+      <SystemMetaRow
+        health={health}
+        monitor={monitor}
+        lastRefresh={lastRefresh}
+        demoFeed={demoFeed}
+      />
 
       {tab === 'dashboard' ? (
         <>
@@ -393,6 +423,50 @@ function App() {
               <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
               <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
               <div>Last message: {monitor?.last_message || '—'}</div>
+            </div>
+
+            <div className="section-head" style={{ marginTop: '1.25rem' }}>
+              <h3>Demo Threat Feed</h3>
+              <span>Presentation mode</span>
+            </div>
+            <p className="muted source-copy">
+              For viva/demo: automatically injects phishing, malware, ransomware, and benign samples
+              every 30 seconds. AI classifies each one and Dashboard charts update live.
+            </p>
+            <div className="action-bar compact">
+              <button
+                className={`btn ${demoFeed?.enabled ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={handleToggleDemoFeed}
+                disabled={demoBusy}
+              >
+                {demoFeed?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                {demoBusy
+                  ? 'Updating…'
+                  : demoFeed?.enabled
+                    ? 'Stop Demo Feed'
+                    : 'Start Demo Feed (30s)'}
+              </button>
+            </div>
+            <div className="source-status mono">
+              <div>
+                Demo status:{' '}
+                <strong>
+                  {demoFeed?.injecting
+                    ? 'Injecting…'
+                    : demoFeed?.enabled
+                      ? 'Running'
+                      : 'Stopped'}
+                </strong>
+              </div>
+              <div>Interval: {demoFeed?.interval_seconds ?? 30}s</div>
+              <div>Cycles: {demoFeed?.cycles_completed ?? 0}</div>
+              <div>
+                Last types:{' '}
+                {(demoFeed?.last_types || []).length
+                  ? demoFeed.last_types.join(', ')
+                  : '—'}
+              </div>
+              <div>Last message: {demoFeed?.last_message || '—'}</div>
             </div>
           </div>
           <IngestPanel onIngested={refresh} onToast={showToast} />

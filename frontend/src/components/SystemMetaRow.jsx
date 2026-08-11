@@ -1,8 +1,16 @@
-export default function SystemMetaRow({ health, monitor, lastRefresh }) {
-  const mode = monitor?.enabled ? 'NETWORK' : health?.network_detection === false ? 'SIMULATED' : 'LOCAL'
-  const source = monitor?.enabled
-    ? `Live LAN Scan · ${health?.scan_subnet || 'auto subnet'}`
-    : 'Manual / Simulated · SQLite'
+export default function SystemMetaRow({ health, monitor, lastRefresh, demoFeed }) {
+  const mode = demoFeed?.enabled
+    ? 'DEMO + NETWORK'
+    : monitor?.enabled
+      ? 'NETWORK'
+      : health?.network_detection === false
+        ? 'SIMULATED'
+        : 'LOCAL'
+  const source = demoFeed?.enabled
+    ? 'Demo Threat Feed + Live LAN / SQLite'
+    : monitor?.enabled
+      ? `Live LAN Scan · ${health?.scan_subnet || 'auto subnet'}`
+      : 'Manual / Simulated · SQLite'
   const updated = lastRefresh
     ? lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : '—'

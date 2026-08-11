@@ -37,3 +37,7 @@ MONITOR_AUTO_START = _env_bool("MONITOR_AUTO_START", True)
 MONITOR_INTERVAL_SECONDS = max(15, min(3600, int(os.getenv("MONITOR_INTERVAL_SECONDS", "45"))))
 MONITOR_BATCH_SIZE = max(4, min(50, int(os.getenv("MONITOR_BATCH_SIZE", "12"))))
 MONITOR_DEDUPE_MINUTES = max(1, min(240, int(os.getenv("MONITOR_DEDUPE_MINUTES", "20"))))
+
+# Demo presentation feeder (phishing/malware/ransomware every N seconds).
+DEMO_FEED_AUTO_START = _env_bool("DEMO_FEED_AUTO_START", False)
+DEMO_FEED_INTERVAL_SECONDS = max(10, min(600, int(os.getenv("DEMO_FEED_INTERVAL_SECONDS", "30"))))
