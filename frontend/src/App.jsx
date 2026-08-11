@@ -22,6 +22,7 @@ import TopNav from './components/TopNav'
 import SystemMetaRow from './components/SystemMetaRow'
 import CityThreatChart from './components/CityThreatChart'
 import RecentAlerts from './components/RecentAlerts'
+import DemoLabPage from './components/DemoLabPage'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -47,6 +48,8 @@ function App() {
   const [monitorBusy, setMonitorBusy] = useState(false)
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
+  const [injectBusy, setInjectBusy] = useState(false)
+  const [lastInjected, setLastInjected] = useState([])
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -155,17 +158,33 @@ function App() {
       if (demoFeed?.enabled) {
         const stopped = await api.stopDemoFeed()
         setDemoFeed(stopped)
-        showToast('Demo threat feed stopped')
+        showToast('Auto demo stopped')
       } else {
         const started = await api.startDemoFeed(30)
         setDemoFeed(started)
-        showToast('Demo feed started — phishing/malware/ransomware every 30s')
+        showToast('Auto demo started — all threat types every 30s')
       }
       await refresh()
     } catch (err) {
       showToast(err.message || 'Could not update demo feed')
     } finally {
       setDemoBusy(false)
+    }
+  }
+
+  async function handleInjectAllThreats() {
+    setInjectBusy(true)
+    try {
+      const result = await api.injectAllDemoThreats()
+      setDemoFeed(result)
+      setLastInjected(result.events || [])
+      showToast(result.last_message || 'All threat types injected and classified')
+      await refresh()
+      setTab('dashboard')
+    } catch (err) {
+      showToast(err.message || 'Demo inject failed')
+    } finally {
+      setInjectBusy(false)
     }
   }
 
@@ -251,7 +270,6 @@ function App() {
         health={health}
         monitor={monitor}
         lastRefresh={lastRefresh}
-        demoFeed={demoFeed}
       />
 
       {tab === 'dashboard' ? (
@@ -424,53 +442,20 @@ function App() {
               <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
               <div>Last message: {monitor?.last_message || '—'}</div>
             </div>
-
-            <div className="section-head" style={{ marginTop: '1.25rem' }}>
-              <h3>Demo Threat Feed</h3>
-              <span>Presentation mode</span>
-            </div>
-            <p className="muted source-copy">
-              For viva/demo: automatically injects phishing, malware, ransomware, and benign samples
-              every 30 seconds. AI classifies each one and Dashboard charts update live.
-            </p>
-            <div className="action-bar compact">
-              <button
-                className={`btn ${demoFeed?.enabled ? 'btn-ghost' : 'btn-primary'}`}
-                onClick={handleToggleDemoFeed}
-                disabled={demoBusy}
-              >
-                {demoFeed?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
-                {demoBusy
-                  ? 'Updating…'
-                  : demoFeed?.enabled
-                    ? 'Stop Demo Feed'
-                    : 'Start Demo Feed (30s)'}
-              </button>
-            </div>
-            <div className="source-status mono">
-              <div>
-                Demo status:{' '}
-                <strong>
-                  {demoFeed?.injecting
-                    ? 'Injecting…'
-                    : demoFeed?.enabled
-                      ? 'Running'
-                      : 'Stopped'}
-                </strong>
-              </div>
-              <div>Interval: {demoFeed?.interval_seconds ?? 30}s</div>
-              <div>Cycles: {demoFeed?.cycles_completed ?? 0}</div>
-              <div>
-                Last types:{' '}
-                {(demoFeed?.last_types || []).length
-                  ? demoFeed.last_types.join(', ')
-                  : '—'}
-              </div>
-              <div>Last message: {demoFeed?.last_message || '—'}</div>
-            </div>
           </div>
           <IngestPanel onIngested={refresh} onToast={showToast} />
         </section>
+      ) : null}
+
+      {tab === 'demo' ? (
+        <DemoLabPage
+          demoFeed={demoFeed}
+          onInjectAll={handleInjectAllThreats}
+          onToggleAuto={handleToggleDemoFeed}
+          injectBusy={injectBusy}
+          autoBusy={demoBusy}
+          lastInjected={lastInjected}
+        />
       ) : null}
 
       {toast ? <div className="toast">{toast}</div> : null}

@@ -1,7 +1,6 @@
-"""Demo threat feeder — injects phishing/malware/ransomware samples on a timer.
+"""Demo threat lab — separate module for presentation injections.
 
-Intended for project presentations so charts and alerts update continuously
-even when the live LAN is quiet.
+Not part of live network monitoring. Used only by the Demo Lab page/API.
 """
 
 from __future__ import annotations
@@ -17,6 +16,7 @@ from .config import DEMO_FEED_AUTO_START, DEMO_FEED_INTERVAL_SECONDS
 from .database import SessionLocal
 from .models import ThreatEvent
 
+# All major threat categories shown in the project UI.
 DEMO_SAMPLES = [
     {
         "threat_hint": "phishing",
@@ -25,7 +25,6 @@ DEMO_SAMPLES = [
         "payloads": [
             "Urgent action required: verify your account and click the login portal link",
             "Your password expired. Reset credentials via the bank account login page",
-            "Suspicious login detected. Update billing payment immediately",
             "Credential harvest attempt via fake password reset email",
         ],
     },
@@ -37,7 +36,6 @@ DEMO_SAMPLES = [
             "Executable download of trojan dropper with registry persistence",
             "PowerShell -enc base64 payload launched reverse shell to C2 beacon",
             "Suspicious process performed DLL injection and worm propagation",
-            "Malware dropper wrote .exe and established C2 beacon",
         ],
     },
     {
@@ -47,8 +45,37 @@ DEMO_SAMPLES = [
         "payloads": [
             "Your files have been encrypted. Pay bitcoin wallet for decryption key",
             "Ransom note: shadow copies deleted, readme_for_decrypt found",
-            "File encryption started across documents. Decrypt key sold for crypto",
             "Ransomware locked files as .locked and demanded bitcoin wallet payment",
+        ],
+    },
+    {
+        "threat_hint": "ddos",
+        "source": "Firewall Flow Logs",
+        "protocol": "TCP",
+        "payloads": [
+            "DDoS SYN flood from botnet traffic exhausting bandwidth capacity",
+            "HTTP flood denial of service against public web portal",
+            "UDP flood distributed denial attack saturating edge routers",
+        ],
+    },
+    {
+        "threat_hint": "brute-force",
+        "source": "Auth Gateway",
+        "protocol": "SSH",
+        "payloads": [
+            "Repeated login attempts and password spray against VPN gateway",
+            "SSH auth failures indicate brute force password guessing",
+            "RDP login failures with credential stuffing from external hosts",
+        ],
+    },
+    {
+        "threat_hint": "social",
+        "source": "User Awareness Sensor",
+        "protocol": "HTTPS",
+        "payloads": [
+            "Social engineering call impersonating help desk scam for MFA codes",
+            "CEO fraud email asking staff to wire transfer urgently",
+            "Gift card social engineering request from fake executive",
         ],
     },
     {
@@ -70,38 +97,46 @@ def _random_ip(private: bool = True) -> str:
     return f"{random.randint(1, 223)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
 
 
-def _inject_cycle(db) -> list[ThreatEvent]:
+def inject_all_threat_types(db) -> list[ThreatEvent]:
+    """Classify and store one event for every threat type (demo button)."""
     created: list[ThreatEvent] = []
     for sample in DEMO_SAMPLES:
         payload = random.choice(sample["payloads"])
         result = classifier.classify(payload)
         threat_type = result.threat_type
-        # Keep demo labels strong for presentation clarity.
-        if sample["threat_hint"] != "benign" and threat_type == "benign":
-            threat_type = sample["threat_hint"]
         if sample["threat_hint"] == "benign":
             threat_type = "benign"
+        elif threat_type == "benign":
+            threat_type = sample["threat_hint"]
 
         severity = result.severity
-        if threat_type == "ransomware" and severity in {"low", "medium"}:
-            severity = "critical"
-        elif threat_type == "malware" and severity == "low":
-            severity = "high"
-        elif threat_type == "phishing" and severity == "low":
-            severity = "medium"
+        severity_override = {
+            "ransomware": "critical",
+            "malware": "high",
+            "ddos": "high",
+            "brute-force": "high",
+            "phishing": "medium",
+            "social": "medium",
+            "benign": "low",
+        }
+        if threat_type in severity_override:
+            severity = severity_override[threat_type]
 
         indicators = list(result.indicators or [])
         indicators.append(f"demo:{sample['threat_hint']}")
 
         event = ThreatEvent(
-            source=f"Demo Threat Feed / {sample['source']}",
+            source=f"Demo Lab / {sample['source']}",
             source_ip=_random_ip(private=True),
             destination_ip=_random_ip(private=False),
             protocol=sample["protocol"],
             raw_payload=payload,
             threat_type=threat_type,
             severity=severity,
-            confidence=round(max(result.confidence, 0.82 if threat_type != "benign" else 0.55), 4),
+            confidence=round(
+                max(result.confidence, 0.84 if threat_type != "benign" else 0.55),
+                4,
+            ),
             indicators=", ".join(indicators),
             status="open",
             is_simulated=True,
@@ -117,7 +152,7 @@ def _inject_cycle(db) -> list[ThreatEvent]:
 
 
 class DemoThreatFeed:
-    """Background feeder that emits all major threat types on an interval."""
+    """Optional timed feeder for the Demo Lab page only."""
 
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
@@ -146,7 +181,49 @@ class DemoThreatFeed:
             "last_message": self._last_message,
             "last_error": self._last_error,
             "last_types": self._last_types,
+            "supported_types": [s["threat_hint"] for s in DEMO_SAMPLES],
         }
+
+    def inject_once(self) -> dict[str, Any]:
+        with self._lock:
+            self._injecting = True
+            self._last_started_at = datetime.now(timezone.utc)
+            self._last_error = None
+        db = SessionLocal()
+        try:
+            created = inject_all_threat_types(db)
+            types = [event.threat_type for event in created]
+            with self._lock:
+                self._cycles += 1
+                self._last_finished_at = datetime.now(timezone.utc)
+                self._last_events = len(created)
+                self._last_types = types
+                self._last_message = (
+                    f"Injected {len(created)} threat types: " + ", ".join(types)
+                )
+            return {
+                **self.status(),
+                "events": [
+                    {
+                        "id": e.id,
+                        "threat_type": e.threat_type,
+                        "severity": e.severity,
+                        "confidence": e.confidence,
+                        "raw_payload": e.raw_payload,
+                    }
+                    for e in created
+                ],
+            }
+        except Exception as exc:  # pragma: no cover
+            with self._lock:
+                self._last_error = str(exc)
+                self._last_finished_at = datetime.now(timezone.utc)
+                self._last_message = f"Demo inject failed: {exc}"
+            raise
+        finally:
+            db.close()
+            with self._lock:
+                self._injecting = False
 
     def start(self, interval_seconds: int | None = None) -> dict[str, Any]:
         with self._lock:
@@ -179,48 +256,21 @@ class DemoThreatFeed:
 
     def _loop(self) -> None:
         while not self._stop.is_set():
-            self._run_once()
+            try:
+                self.inject_once()
+            except Exception:
+                pass
             waited = 0.0
             interval = float(self._interval)
             while waited < interval and not self._stop.is_set():
                 time.sleep(min(1.0, interval - waited))
                 waited += 1.0
 
-    def _run_once(self) -> None:
-        with self._lock:
-            if self._injecting:
-                return
-            self._injecting = True
-            self._last_started_at = datetime.now(timezone.utc)
-            self._last_error = None
-
-        db = SessionLocal()
-        try:
-            created = _inject_cycle(db)
-            types = [event.threat_type for event in created]
-            with self._lock:
-                self._cycles += 1
-                self._last_finished_at = datetime.now(timezone.utc)
-                self._last_events = len(created)
-                self._last_types = types
-                self._last_message = (
-                    f"Demo feed injected {len(created)} events: "
-                    + ", ".join(sorted(set(types)))
-                )
-        except Exception as exc:  # pragma: no cover
-            with self._lock:
-                self._last_error = str(exc)
-                self._last_finished_at = datetime.now(timezone.utc)
-                self._last_message = f"Demo feed failed: {exc}"
-        finally:
-            db.close()
-            with self._lock:
-                self._injecting = False
-
 
 demo_feed = DemoThreatFeed()
 
 
 def autostart_demo_feed() -> None:
+    # Kept off by default — Demo Lab is manual / separate page.
     if DEMO_FEED_AUTO_START:
         demo_feed.start()

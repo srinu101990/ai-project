@@ -47,6 +47,11 @@ export const api = {
       body: JSON.stringify({}),
     }),
   demoFeedStatus: () => request('/demo-feed'),
+  injectAllDemoThreats: () =>
+    request('/demo-feed/inject-all', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   startDemoFeed: (intervalSeconds = 30) =>
     request('/demo-feed/start', {
       method: 'POST',

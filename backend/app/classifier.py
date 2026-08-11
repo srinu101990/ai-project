@@ -1,26 +1,38 @@
-"""AI threat classifier for phishing, malware, and ransomware."""
+"""AI threat classifier for multiple cyber threat types."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 import joblib
 import numpy as np
-from pathlib import Path
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
-MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier.joblib"
+# v2 model includes ddos / brute force / social classes.
+MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier_v2.joblib"
 
-THREAT_TYPES = ("phishing", "malware", "ransomware", "benign")
+THREAT_TYPES = (
+    "phishing",
+    "malware",
+    "ransomware",
+    "ddos",
+    "brute-force",
+    "social",
+    "benign",
+)
 
 SEVERITY_BY_TYPE = {
     "ransomware": "critical",
     "malware": "high",
+    "ddos": "high",
     "phishing": "medium",
+    "brute-force": "high",
+    "social": "medium",
     "benign": "low",
 }
 
@@ -65,6 +77,40 @@ RANSOMWARE_PATTERNS = [
     (r"readme_for_decrypt", "decrypt readme note"),
 ]
 
+DDOS_PATTERNS = [
+    (r"ddos", "ddos keyword"),
+    (r"distributed\s+denial", "distributed denial"),
+    (r"syn\s+flood", "SYN flood"),
+    (r"udp\s+flood", "UDP flood"),
+    (r"http\s+flood", "HTTP flood"),
+    (r"traffic\s+flood", "traffic flood"),
+    (r"botnet\s+traffic", "botnet traffic"),
+    (r"exhaust(ed|ing)?\s+(bandwidth|capacity)", "capacity exhaustion"),
+    (r"deny\s+of\s+service|denial\s+of\s+service", "denial of service"),
+]
+
+BRUTE_FORCE_PATTERNS = [
+    (r"brute\s*force", "brute force keyword"),
+    (r"repeated\s+login\s+attempts", "repeated login attempts"),
+    (r"password\s+spray", "password spray"),
+    (r"failed\s+authentication", "failed authentication"),
+    (r"credential\s+stuffing", "credential stuffing"),
+    (r"ssh\s+auth\s+failures", "SSH auth failures"),
+    (r"rdp\s+login\s+failures", "RDP login failures"),
+    (r"guess(ing)?\s+passwords", "password guessing"),
+]
+
+SOCIAL_PATTERNS = [
+    (r"social\s+engineering", "social engineering"),
+    (r"impersonat(e|ion)", "impersonation"),
+    (r"ceo\s+fraud", "CEO fraud"),
+    (r"help\s*desk\s+scam", "help desk scam"),
+    (r"gift\s+card", "gift card request"),
+    (r"wire\s+transfer\s+urgently", "urgent wire transfer"),
+    (r"pretend(ing)?\s+to\s+be", "identity pretence"),
+    (r"manipulate(d|s)?\s+(employee|staff|user)", "user manipulation"),
+]
+
 
 @dataclass
 class ClassificationResult:
@@ -89,6 +135,9 @@ def rule_based_classify(text: str) -> ClassificationResult:
         "phishing": _rule_score(text, PHISHING_PATTERNS),
         "malware": _rule_score(text, MALWARE_PATTERNS),
         "ransomware": _rule_score(text, RANSOMWARE_PATTERNS),
+        "ddos": _rule_score(text, DDOS_PATTERNS),
+        "brute-force": _rule_score(text, BRUTE_FORCE_PATTERNS),
+        "social": _rule_score(text, SOCIAL_PATTERNS),
     }
     best_type = max(scores, key=lambda k: scores[k][0])
     best_score, indicators = scores[best_type]
@@ -101,7 +150,6 @@ def rule_based_classify(text: str) -> ClassificationResult:
             indicators=[],
         )
 
-    # Boost confidence when multiple indicators match.
     confidence = round(min(0.99, 0.55 + best_score * 0.4), 3)
     return ClassificationResult(
         threat_type=best_type,
@@ -128,6 +176,18 @@ def _training_corpus() -> tuple[list[str], list[str]]:
         ("File encryption started across documents. Decrypt key sold for crypto", "ransomware"),
         ("Ransomware locked files as .locked and demanded bitcoin wallet payment", "ransomware"),
         ("Encrypted drive ransom: pay in crypto for decryption key", "ransomware"),
+        ("DDoS SYN flood from botnet traffic exhausting bandwidth capacity", "ddos"),
+        ("HTTP flood denial of service against public web portal", "ddos"),
+        ("UDP flood distributed denial attack saturating edge routers", "ddos"),
+        ("Botnet traffic flood attempting to exhaust capacity of API gateway", "ddos"),
+        ("Repeated login attempts and password spray against VPN gateway", "brute-force"),
+        ("SSH auth failures indicate brute force password guessing", "brute-force"),
+        ("RDP login failures with credential stuffing from external hosts", "brute-force"),
+        ("Failed authentication storm looks like brute force attack", "brute-force"),
+        ("Social engineering call impersonating help desk scam for MFA codes", "social"),
+        ("CEO fraud email asking staff to wire transfer urgently", "social"),
+        ("Attacker pretending to be vendor manipulated employee for access", "social"),
+        ("Gift card social engineering request from fake executive", "social"),
         ("Normal outbound HTTPS traffic to corporate CDN", "benign"),
         ("User opened a shared document in the collaboration suite", "benign"),
         ("Scheduled backup completed successfully on file server", "benign"),
@@ -144,10 +204,7 @@ def train_and_persist_model() -> Pipeline:
     pipeline = Pipeline(
         [
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1)),
-            (
-                "clf",
-                LogisticRegression(max_iter=1000),
-            ),
+            ("clf", LogisticRegression(max_iter=1000)),
         ]
     )
     pipeline.fit(texts, labels)
@@ -176,13 +233,11 @@ class ThreatClassifier:
         ml_type = classes[ml_idx]
         ml_confidence = float(proba[ml_idx])
 
-        # Prefer ransomware/malware when either path is strongly confident.
         if rule_result.threat_type != "benign" and rule_result.confidence >= 0.75:
             return rule_result
 
         if ml_confidence >= 0.45:
             indicators = rule_result.indicators if rule_result.threat_type == ml_type else []
-            # Merge rule hits when useful for explainability.
             if not indicators and rule_result.threat_type != "benign":
                 indicators = rule_result.indicators
             return ClassificationResult(
@@ -195,5 +250,4 @@ class ThreatClassifier:
         return rule_result
 
 
-# Singleton used by the API
 classifier = ThreatClassifier()

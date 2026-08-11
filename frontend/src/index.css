@@ -985,11 +985,79 @@ th {
 .badge.phishing { color: #fdba74; background: rgba(249, 115, 22, 0.12); border-color: rgba(249, 115, 22, 0.35); }
 .badge.malware { color: #fca5a5; background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.4); }
 .badge.ransomware { color: #d8b4fe; background: rgba(168, 85, 247, 0.16); border-color: rgba(168, 85, 247, 0.4); }
+.badge.ddos { color: #93c5fd; background: rgba(59, 130, 246, 0.14); border-color: rgba(59, 130, 246, 0.4); }
+.badge.brute-force { color: #67e8f9; background: rgba(34, 211, 238, 0.14); border-color: rgba(34, 211, 238, 0.4); }
+.badge.social { color: #86efac; background: rgba(74, 222, 128, 0.14); border-color: rgba(74, 222, 128, 0.4); }
 .badge.benign { color: #86efac; background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.35); }
 .badge.critical { color: #fecaca; background: rgba(239, 68, 68, 0.16); }
 .badge.high { color: #fdba74; background: rgba(249, 115, 22, 0.14); }
 .badge.medium { color: #fde047; background: rgba(234, 179, 8, 0.14); }
 .badge.low { color: #86efac; background: rgba(34, 197, 94, 0.12); }
+
+/* ── Demo Lab page ── */
+.demo-lab {
+  display: grid;
+  gap: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.demo-hero .source-copy strong {
+  color: var(--cyan);
+}
+
+.demo-type-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.85rem 0 1rem;
+}
+
+.demo-type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(94, 160, 255, 0.22);
+  background: rgba(8, 14, 30, 0.7);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.demo-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.demo-result-card {
+  padding: 0.85rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(94, 160, 255, 0.16);
+  background: rgba(8, 14, 30, 0.65);
+}
+
+.demo-result-top {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.demo-result-payload {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .demo-result-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 .mono {
   font-family: var(--font-mono);

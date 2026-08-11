@@ -165,6 +165,12 @@ def demo_feed_status():
     return demo_feed.status()
 
 
+@app.post("/api/demo-feed/inject-all", response_model=DemoFeedStatus)
+def demo_feed_inject_all():
+    """One-click inject of all supported threat types for Demo Lab."""
+    return demo_feed.inject_once()
+
+
 @app.post("/api/demo-feed/start", response_model=DemoFeedStatus)
 def demo_feed_start(payload: DemoFeedControlRequest = DemoFeedControlRequest()):
     return demo_feed.start(interval_seconds=payload.interval_seconds or 30)

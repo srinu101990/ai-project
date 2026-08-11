@@ -125,6 +125,8 @@ class DemoFeedStatus(BaseModel):
     last_message: Optional[str] = None
     last_error: Optional[str] = None
     last_types: list[str] = []
+    supported_types: list[str] = []
+    events: Optional[list[dict]] = None
 
 
 class DemoFeedControlRequest(BaseModel):

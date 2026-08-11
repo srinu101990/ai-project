@@ -4,6 +4,7 @@ const TABS = [
   { id: 'analyzer', label: 'AI Analyzer' },
   { id: 'reports', label: 'Reports' },
   { id: 'sources', label: 'Sources' },
+  { id: 'demo', label: 'Threat Demo' },
 ]
 
 export default function TopNav({ active, onChange }) {

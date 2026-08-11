@@ -18,6 +18,7 @@ const TYPE_COLORS = {
   ransomware: '#a855f7',
   benign: '#22c55e',
   ddos: '#3b82f6',
+  'brute-force': '#22d3ee',
   'brute force': '#22d3ee',
   social: '#4ade80',
 }
