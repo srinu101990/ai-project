@@ -126,6 +126,9 @@ class DemoFeedStatus(BaseModel):
     last_error: Optional[str] = None
     last_types: list[str] = []
     supported_types: list[str] = []
+    mode: Optional[str] = None
+    current_type: Optional[str] = None
+    next_type: Optional[str] = None
     events: Optional[list[dict]] = None
 
 

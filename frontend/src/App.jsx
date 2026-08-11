@@ -23,6 +23,7 @@ import SystemMetaRow from './components/SystemMetaRow'
 import CityThreatChart from './components/CityThreatChart'
 import RecentAlerts from './components/RecentAlerts'
 import DemoLabPage from './components/DemoLabPage'
+import RemediationPanel from './components/RemediationPanel'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -50,6 +51,7 @@ function App() {
   const [demoBusy, setDemoBusy] = useState(false)
   const [injectBusy, setInjectBusy] = useState(false)
   const [lastInjected, setLastInjected] = useState([])
+  const [classifiedType, setClassifiedType] = useState(null)
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -158,11 +160,12 @@ function App() {
       if (demoFeed?.enabled) {
         const stopped = await api.stopDemoFeed()
         setDemoFeed(stopped)
-        showToast('Auto demo stopped')
+        showToast('Threat Demo stopped')
       } else {
         const started = await api.startDemoFeed(30)
         setDemoFeed(started)
-        showToast('Auto demo started — all threat types every 30s')
+        showToast('Threat Demo started — one virus type every 30 seconds')
+        setTab('dashboard')
       }
       await refresh()
     } catch (err) {
@@ -270,6 +273,9 @@ function App() {
         health={health}
         monitor={monitor}
         lastRefresh={lastRefresh}
+        demoFeed={demoFeed}
+        onToggleDemo={handleToggleDemoFeed}
+        demoBusy={demoBusy}
       />
 
       {tab === 'dashboard' ? (
@@ -347,18 +353,11 @@ function App() {
 
       {tab === 'analyzer' ? (
         <section className="page-grid">
-          <ClassifyPanel onToast={showToast} />
-          <div className="panel section">
-            <div className="section-head">
-              <h3>Analyzer Tips</h3>
-              <span>Local AI engine</span>
-            </div>
-            <ul className="report-list">
-              <li>Paste suspicious email text, URLs, or process logs to classify instantly.</li>
-              <li>Model labels phishing, malware, ransomware, and benign traffic on-device.</li>
-              <li>Network monitor findings are also classified with the same AI engine.</li>
-            </ul>
-          </div>
+          <ClassifyPanel
+            onToast={showToast}
+            onClassified={(data) => setClassifiedType(data?.threat_type || null)}
+          />
+          <RemediationPanel threatType={classifiedType} />
         </section>
       ) : null}
 

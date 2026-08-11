@@ -326,6 +326,10 @@ a {
   animation: rise 0.75s ease both;
 }
 
+.meta-row.with-action {
+  align-items: stretch;
+}
+
 .meta-pill {
   display: flex;
   flex-direction: column;
@@ -335,6 +339,29 @@ a {
   border: 1px solid rgba(94, 160, 255, 0.22);
   background: rgba(10, 18, 40, 0.72);
   min-width: 0;
+}
+
+.meta-pill-action {
+  border-radius: 18px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.meta-updated-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.meta-demo-btn {
+  flex-shrink: 0;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .meta-label {
@@ -352,6 +379,28 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.remediation-head {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+  color: #fdba74;
+}
+
+.remediation-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.remediation-list li::marker {
+  color: var(--cyan);
 }
 
 /* ── Dashboard layout grids ── */

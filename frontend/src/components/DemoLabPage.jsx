@@ -44,8 +44,9 @@ export default function DemoLabPage({
           <span>Separate presentation page</span>
         </div>
         <p className="muted source-copy">
-          This page is only for demo/viva. Click one button to send <strong>all threat types</strong>
-          . The AI model classifies each event, then Dashboard charts and alerts update.
+          Use <strong>Inject All Threat Types</strong> for a one-shot demo, or start sequential mode
+          (one virus type every 30 seconds). You can also start sequential mode from the Dashboard
+          <strong> Threat Demo</strong> button beside Last Updated.
         </p>
 
         <div className="demo-type-grid">
@@ -74,8 +75,8 @@ export default function DemoLabPage({
             {autoBusy
               ? 'Updating…'
               : demoFeed?.enabled
-                ? 'Stop Auto Demo (30s)'
-                : 'Auto Repeat Every 30s'}
+                ? 'Stop Sequential Demo'
+                : 'Start Sequential (30s)'}
           </button>
         </div>
 

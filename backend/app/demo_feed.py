@@ -1,6 +1,8 @@
 """Demo threat lab — separate module for presentation injections.
 
-Not part of live network monitoring. Used only by the Demo Lab page/API.
+Supports:
+- inject-all (one-shot every type)
+- sequential auto feed (one threat type every N seconds)
 """
 
 from __future__ import annotations
@@ -16,7 +18,6 @@ from .config import DEMO_FEED_AUTO_START, DEMO_FEED_INTERVAL_SECONDS
 from .database import SessionLocal
 from .models import ThreatEvent
 
-# All major threat categories shown in the project UI.
 DEMO_SAMPLES = [
     {
         "threat_hint": "phishing",
@@ -90,6 +91,16 @@ DEMO_SAMPLES = [
     },
 ]
 
+SEVERITY_OVERRIDE = {
+    "ransomware": "critical",
+    "malware": "high",
+    "ddos": "high",
+    "brute-force": "high",
+    "phishing": "medium",
+    "social": "medium",
+    "benign": "low",
+}
+
 
 def _random_ip(private: bool = True) -> str:
     if private:
@@ -97,62 +108,65 @@ def _random_ip(private: bool = True) -> str:
     return f"{random.randint(1, 223)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
 
 
+def _build_event(sample: dict[str, Any]) -> ThreatEvent:
+    payload = random.choice(sample["payloads"])
+    result = classifier.classify(payload)
+    threat_type = result.threat_type
+    if sample["threat_hint"] == "benign":
+        threat_type = "benign"
+    elif threat_type == "benign":
+        threat_type = sample["threat_hint"]
+
+    severity = SEVERITY_OVERRIDE.get(threat_type, result.severity)
+    indicators = list(result.indicators or [])
+    indicators.append(f"demo:{sample['threat_hint']}")
+
+    return ThreatEvent(
+        source=f"Demo Lab / {sample['source']}",
+        source_ip=_random_ip(private=True),
+        destination_ip=_random_ip(private=False),
+        protocol=sample["protocol"],
+        raw_payload=payload,
+        threat_type=threat_type,
+        severity=severity,
+        confidence=round(max(result.confidence, 0.84 if threat_type != "benign" else 0.55), 4),
+        indicators=", ".join(indicators),
+        status="open",
+        is_simulated=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
 def inject_all_threat_types(db) -> list[ThreatEvent]:
-    """Classify and store one event for every threat type (demo button)."""
-    created: list[ThreatEvent] = []
-    for sample in DEMO_SAMPLES:
-        payload = random.choice(sample["payloads"])
-        result = classifier.classify(payload)
-        threat_type = result.threat_type
-        if sample["threat_hint"] == "benign":
-            threat_type = "benign"
-        elif threat_type == "benign":
-            threat_type = sample["threat_hint"]
-
-        severity = result.severity
-        severity_override = {
-            "ransomware": "critical",
-            "malware": "high",
-            "ddos": "high",
-            "brute-force": "high",
-            "phishing": "medium",
-            "social": "medium",
-            "benign": "low",
-        }
-        if threat_type in severity_override:
-            severity = severity_override[threat_type]
-
-        indicators = list(result.indicators or [])
-        indicators.append(f"demo:{sample['threat_hint']}")
-
-        event = ThreatEvent(
-            source=f"Demo Lab / {sample['source']}",
-            source_ip=_random_ip(private=True),
-            destination_ip=_random_ip(private=False),
-            protocol=sample["protocol"],
-            raw_payload=payload,
-            threat_type=threat_type,
-            severity=severity,
-            confidence=round(
-                max(result.confidence, 0.84 if threat_type != "benign" else 0.55),
-                4,
-            ),
-            indicators=", ".join(indicators),
-            status="open",
-            is_simulated=True,
-            created_at=datetime.now(timezone.utc),
-        )
+    created = [_build_event(sample) for sample in DEMO_SAMPLES]
+    for event in created:
         db.add(event)
-        created.append(event)
-
     db.commit()
     for event in created:
         db.refresh(event)
     return created
 
 
+def inject_one_threat_type(db, sample: dict[str, Any]) -> ThreatEvent:
+    event = _build_event(sample)
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def _event_payload(event: ThreatEvent) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "threat_type": event.threat_type,
+        "severity": event.severity,
+        "confidence": event.confidence,
+        "raw_payload": event.raw_payload,
+    }
+
+
 class DemoThreatFeed:
-    """Optional timed feeder for the Demo Lab page only."""
+    """Timed feeder that releases one threat type every interval."""
 
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
@@ -162,17 +176,22 @@ class DemoThreatFeed:
         self._injecting = False
         self._interval = DEMO_FEED_INTERVAL_SECONDS
         self._cycles = 0
+        self._type_index = 0
+        self._mode = "stopped"
         self._last_started_at: datetime | None = None
         self._last_finished_at: datetime | None = None
         self._last_message: str | None = None
         self._last_error: str | None = None
         self._last_events = 0
         self._last_types: list[str] = []
+        self._current_type: str | None = None
+        self._next_type: str | None = None
 
     def status(self) -> dict[str, Any]:
         return {
             "enabled": self._running,
             "injecting": self._injecting,
+            "mode": self._mode,
             "interval_seconds": self._interval,
             "cycles_completed": self._cycles,
             "last_started_at": self._last_started_at,
@@ -181,12 +200,15 @@ class DemoThreatFeed:
             "last_message": self._last_message,
             "last_error": self._last_error,
             "last_types": self._last_types,
+            "current_type": self._current_type,
+            "next_type": self._next_type,
             "supported_types": [s["threat_hint"] for s in DEMO_SAMPLES],
         }
 
     def inject_once(self) -> dict[str, Any]:
         with self._lock:
             self._injecting = True
+            self._mode = "inject-all"
             self._last_started_at = datetime.now(timezone.utc)
             self._last_error = None
         db = SessionLocal()
@@ -198,22 +220,14 @@ class DemoThreatFeed:
                 self._last_finished_at = datetime.now(timezone.utc)
                 self._last_events = len(created)
                 self._last_types = types
+                self._current_type = types[-1] if types else None
+                self._next_type = None
                 self._last_message = (
                     f"Injected {len(created)} threat types: " + ", ".join(types)
                 )
-            return {
-                **self.status(),
-                "events": [
-                    {
-                        "id": e.id,
-                        "threat_type": e.threat_type,
-                        "severity": e.severity,
-                        "confidence": e.confidence,
-                        "raw_payload": e.raw_payload,
-                    }
-                    for e in created
-                ],
-            }
+                if not self._running:
+                    self._mode = "stopped"
+            return {**self.status(), "events": [_event_payload(e) for e in created]}
         except Exception as exc:  # pragma: no cover
             with self._lock:
                 self._last_error = str(exc)
@@ -225,7 +239,50 @@ class DemoThreatFeed:
             with self._lock:
                 self._injecting = False
 
+    def inject_next(self) -> dict[str, Any]:
+        """Inject exactly one next threat type in rotation."""
+        with self._lock:
+            self._injecting = True
+            sample = DEMO_SAMPLES[self._type_index % len(DEMO_SAMPLES)]
+            self._current_type = sample["threat_hint"]
+            self._next_type = DEMO_SAMPLES[(self._type_index + 1) % len(DEMO_SAMPLES)][
+                "threat_hint"
+            ]
+            self._last_started_at = datetime.now(timezone.utc)
+            self._last_error = None
+            index_now = self._type_index
+
+        db = SessionLocal()
+        try:
+            event = inject_one_threat_type(db, sample)
+            with self._lock:
+                self._type_index = (index_now + 1) % len(DEMO_SAMPLES)
+                self._cycles += 1
+                self._last_finished_at = datetime.now(timezone.utc)
+                self._last_events = 1
+                self._last_types = [event.threat_type]
+                self._current_type = event.threat_type
+                self._next_type = DEMO_SAMPLES[self._type_index % len(DEMO_SAMPLES)][
+                    "threat_hint"
+                ]
+                self._last_message = (
+                    f"Sequential demo: classified {event.threat_type} "
+                    f"({event.severity}). Next: {self._next_type} in {self._interval}s"
+                )
+            return {**self.status(), "events": [_event_payload(event)]}
+        except Exception as exc:  # pragma: no cover
+            with self._lock:
+                self._last_error = str(exc)
+                self._last_finished_at = datetime.now(timezone.utc)
+                self._last_message = f"Sequential demo failed: {exc}"
+            raise
+        finally:
+            db.close()
+            with self._lock:
+                self._injecting = False
+
     def start(self, interval_seconds: int | None = None) -> dict[str, Any]:
+        """Start one-by-one sequential demo (one virus type every interval)."""
         with self._lock:
             if interval_seconds is not None:
                 self._interval = max(10, min(600, int(interval_seconds)))
@@ -233,10 +290,14 @@ class DemoThreatFeed:
                 return self.status()
             self._stop.clear()
             self._running = True
+            self._mode = "sequential"
             self._last_error = None
+            self._next_type = DEMO_SAMPLES[self._type_index % len(DEMO_SAMPLES)][
+                "threat_hint"
+            ]
             self._thread = threading.Thread(
                 target=self._loop,
-                name="demo-threat-feed",
+                name="demo-threat-feed-sequential",
                 daemon=True,
             )
             self._thread.start()
@@ -252,12 +313,13 @@ class DemoThreatFeed:
         with self._lock:
             self._injecting = False
             self._thread = None
+            self._mode = "stopped"
             return self.status()
 
     def _loop(self) -> None:
         while not self._stop.is_set():
             try:
-                self.inject_once()
+                self.inject_next()
             except Exception:
                 pass
             waited = 0.0
@@ -271,6 +333,5 @@ demo_feed = DemoThreatFeed()
 
 
 def autostart_demo_feed() -> None:
-    # Kept off by default — Demo Lab is manual / separate page.
     if DEMO_FEED_AUTO_START:
         demo_feed.start()

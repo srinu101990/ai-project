@@ -6,9 +6,12 @@ const SAMPLES = [
   'Urgent action required: verify your account and click the login portal link',
   'PowerShell -enc base64 payload launched reverse shell to C2 beacon',
   'Your files have been encrypted. Pay bitcoin wallet for decryption key',
+  'DDoS SYN flood from botnet traffic exhausting bandwidth capacity',
+  'SSH auth failures indicate brute force password guessing',
+  'CEO fraud email asking staff to wire transfer urgently',
 ]
 
-export default function ClassifyPanel({ onToast }) {
+export default function ClassifyPanel({ onToast, onClassified }) {
   const [text, setText] = useState(SAMPLES[0])
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -20,6 +23,7 @@ export default function ClassifyPanel({ onToast }) {
     try {
       const data = await api.classify(text.trim())
       setResult(data)
+      onClassified?.(data)
       onToast?.(`Classified as ${data.threat_type} (${Math.round(data.confidence * 100)}%)`)
     } catch (err) {
       onToast?.(err.message || 'Classification failed')
@@ -32,7 +36,7 @@ export default function ClassifyPanel({ onToast }) {
     <div className="panel section">
       <div className="section-head">
         <h3>AI Threat Classification</h3>
-        <span>Phishing · Malware · Ransomware</span>
+        <span>All threat categories</span>
       </div>
       <form className="form" onSubmit={handleClassify}>
         <label>
