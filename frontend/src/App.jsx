@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Activity,
   Brain,
+  CheckCircle2,
   Crosshair,
   PauseCircle,
   PlayCircle,
@@ -12,14 +12,16 @@ import {
   Wifi,
 } from 'lucide-react'
 import { api } from './api'
-import ThreatCharts from './components/ThreatCharts'
+import { ClassificationChart, SeverityChart } from './components/ThreatCharts'
 import ThreatTable from './components/ThreatTable'
 import ClassifyPanel from './components/ClassifyPanel'
 import IngestPanel from './components/IngestPanel'
 import ReportPanel from './components/ReportPanel'
-import ThreatDefinitions from './components/ThreatDefinitions'
 import LogAnalyzer from './components/LogAnalyzer'
-import StatusFooter from './components/StatusFooter'
+import TopNav from './components/TopNav'
+import SystemMetaRow from './components/SystemMetaRow'
+import CityThreatChart from './components/CityThreatChart'
+import RecentAlerts from './components/RecentAlerts'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -31,6 +33,7 @@ function useClock() {
 }
 
 function App() {
+  const [tab, setTab] = useState('dashboard')
   const [stats, setStats] = useState(null)
   const [threats, setThreats] = useState([])
   const [summary, setSummary] = useState(null)
@@ -73,13 +76,11 @@ function App() {
 
   useEffect(() => {
     refresh()
-    // Refresh often so continuous monitor results appear without a click.
     const timer = window.setInterval(refresh, 5000)
     return () => window.clearInterval(timer)
   }, [refresh])
 
   useEffect(() => {
-    // Ensure continuous monitoring is running when the dashboard loads.
     let cancelled = false
     ;(async () => {
       try {
@@ -95,7 +96,7 @@ function App() {
           setMonitor(status)
         }
       } catch {
-        // Backend may still be starting; the poll loop will retry.
+        // Backend may still be starting.
       }
     })()
     return () => {
@@ -166,6 +167,9 @@ function App() {
   }
 
   const critical = stats?.by_severity?.critical || 0
+  const containedResolved = (threats || []).filter((t) =>
+    ['contained', 'resolved'].includes(t.status),
+  ).length
   const confidencePct = stats
     ? `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
     : '—'
@@ -193,24 +197,15 @@ function App() {
         </div>
 
         <div
-          className={`secure-pill network-pill ${monitor?.enabled ? 'monitoring' : ''}`}
+          className={`secure-pill ${monitor?.enabled ? 'monitoring' : ''}`}
           title={
             monitor?.enabled
               ? `Continuous monitoring every ${monitor.interval_seconds}s`
-              : health?.scan_subnet
-                ? `Live LAN detection on ${health.scan_subnet}`
-                : 'Live LAN host/port/connection detection'
+              : 'Secure local AI + SQLite mode'
           }
         >
-          <Wifi size={15} />
-          {monitor?.enabled
-            ? monitor.scanning
-              ? 'Monitoring · Scanning…'
-              : 'Continuous Monitoring'
-            : health?.network_detection === false
-              ? 'Simulated Mode'
-              : 'Network Detection'}
-          {health?.local_ip ? ` · ${health.local_ip}` : ''}
+          <Shield size={15} />
+          Secure Local Mode
         </div>
 
         <div className="sys-status">
@@ -226,116 +221,183 @@ function App() {
         </div>
       </header>
 
-      <ThreatDefinitions />
+      <TopNav active={tab} onChange={setTab} />
+      <SystemMetaRow health={health} monitor={monitor} lastRefresh={lastRefresh} />
 
-      <section className="kpi-row" aria-label="Summary metrics">
-        <article className="kpi-card panel total">
-          <div className="kpi-icon">
-            <Shield size={22} />
-          </div>
-          <div>
-            <div className="stat-label">Total Threats Ingested</div>
-            <div className="stat-value">{stats?.total_threats ?? '—'}</div>
-          </div>
-        </article>
-        <article className="kpi-card panel critical">
-          <div className="kpi-icon">
-            <ShieldAlert size={22} />
-          </div>
-          <div>
-            <div className="stat-label">Critical Incidents</div>
-            <div className="stat-value">{critical}</div>
-          </div>
-        </article>
-        <article className="kpi-card panel dominant">
-          <div className="kpi-icon">
-            <Crosshair size={22} />
-          </div>
-          <div>
-            <div className="stat-label">Dominant Vector</div>
-            <div className="stat-value text-value">{dominant}</div>
-          </div>
-        </article>
-        <article className="kpi-card panel confidence">
-          <div className="kpi-icon">
-            <Brain size={22} />
-          </div>
-          <div>
-            <div className="stat-label">AI Model Confidence</div>
-            <div className="stat-value">{confidencePct}</div>
-          </div>
-        </article>
-      </section>
+      {tab === 'dashboard' ? (
+        <>
+          <section className="dashboard-top">
+            <LogAnalyzer threat={latestThreat} />
+            <ClassificationChart stats={stats || { by_type: {} }} />
+            <SeverityChart stats={stats || { by_severity: {} }} />
+          </section>
 
-      <section className="action-bar">
-        <button
-          className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
-          onClick={handleToggleMonitor}
-          disabled={monitorBusy}
-        >
-          {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
-          {monitorBusy
-            ? 'Updating…'
-            : monitor?.enabled
-              ? 'Pause Monitoring'
-              : 'Resume Monitoring'}
-        </button>
-        <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
-          <Radar size={16} />
-          {collecting ? 'Scanning now…' : 'Scan Now'}
-        </button>
-        <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'spin' : undefined} />
-          Refresh Intel
-        </button>
-        <span className="action-hint mono">
-          {monitor?.enabled
-            ? `Auto-scan every ${monitor.interval_seconds}s · Cycles ${monitor.cycles_completed}`
-            : 'Monitoring paused'}
-          {' · '}
-          Open: {stats?.open_threats ?? '—'}
-          {health?.scan_subnet ? ` · ${health.scan_subnet}` : ''}
-        </span>
-      </section>
+          <section className="kpi-row five" aria-label="Summary metrics">
+            <article className="kpi-card panel total">
+              <div className="kpi-icon">
+                <Shield size={22} />
+              </div>
+              <div>
+                <div className="stat-label">Total Threats Ingested</div>
+                <div className="stat-value">{stats?.total_threats ?? '—'}</div>
+              </div>
+            </article>
+            <article className="kpi-card panel critical">
+              <div className="kpi-icon">
+                <ShieldAlert size={22} />
+              </div>
+              <div>
+                <div className="stat-label">Critical Incidents</div>
+                <div className="stat-value">{critical}</div>
+              </div>
+            </article>
+            <article className="kpi-card panel dominant">
+              <div className="kpi-icon">
+                <Crosshair size={22} />
+              </div>
+              <div>
+                <div className="stat-label">Dominant Vector</div>
+                <div className="stat-value text-value">{dominant}</div>
+              </div>
+            </article>
+            <article className="kpi-card panel confidence">
+              <div className="kpi-icon">
+                <Brain size={22} />
+              </div>
+              <div>
+                <div className="stat-label">AI Model Confidence</div>
+                <div className="stat-value">{confidencePct}</div>
+              </div>
+            </article>
+            <article className="kpi-card panel resolved">
+              <div className="kpi-icon">
+                <CheckCircle2 size={22} />
+              </div>
+              <div>
+                <div className="stat-label">Contained / Resolved</div>
+                <div className="stat-value">{containedResolved}</div>
+              </div>
+            </article>
+          </section>
 
-      <section className="intel-row">
-        <LogAnalyzer threat={latestThreat} />
-        <ThreatCharts stats={stats || { timeline: [], by_type: {}, by_severity: {} }} />
-      </section>
+          <section className="dashboard-bottom">
+            <CityThreatChart threats={threats} />
+            <RecentAlerts threats={threats} />
+          </section>
+        </>
+      ) : null}
 
-      <section className="layout-grid">
-        <div className="panel section">
+      {tab === 'threats' ? (
+        <section className="panel section page-panel">
           <div className="section-head">
-            <h3>Live Threat Feed</h3>
-            <span>
-              <Activity size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
-              Stream synced{' '}
-              {lastRefresh
-                ? lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : '—'}
-            </span>
+            <h3>Threat Intelligence Feed</h3>
+            <span>Live classified network events</span>
           </div>
           <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
-        </div>
-        <ReportPanel
-          summary={summary}
-          onDownload={handleDownload}
-          downloading={downloading}
-        />
-      </section>
+        </section>
+      ) : null}
 
-      <section className="tools-grid">
-        <ClassifyPanel onToast={showToast} />
-        <IngestPanel onIngested={refresh} onToast={showToast} />
-      </section>
+      {tab === 'analyzer' ? (
+        <section className="page-grid">
+          <ClassifyPanel onToast={showToast} />
+          <div className="panel section">
+            <div className="section-head">
+              <h3>Analyzer Tips</h3>
+              <span>Local AI engine</span>
+            </div>
+            <ul className="report-list">
+              <li>Paste suspicious email text, URLs, or process logs to classify instantly.</li>
+              <li>Model labels phishing, malware, ransomware, and benign traffic on-device.</li>
+              <li>Network monitor findings are also classified with the same AI engine.</li>
+            </ul>
+          </div>
+        </section>
+      ) : null}
 
-      <StatusFooter
-        lastRefresh={lastRefresh}
-        onRefresh={refresh}
-        loading={loading}
-        health={health}
-        monitor={monitor}
-      />
+      {tab === 'reports' ? (
+        <section className="page-grid">
+          <ReportPanel
+            summary={summary}
+            onDownload={handleDownload}
+            downloading={downloading}
+          />
+          <div className="panel section">
+            <div className="section-head">
+              <h3>Report Snapshot</h3>
+              <span>Decision support</span>
+            </div>
+            <div className="snapshot-grid">
+              <div>
+                <div className="stat-label">Open cases</div>
+                <div className="stat-value">{stats?.open_threats ?? '—'}</div>
+              </div>
+              <div>
+                <div className="stat-label">High severity</div>
+                <div className="stat-value">{stats?.by_severity?.high ?? 0}</div>
+              </div>
+              <div>
+                <div className="stat-label">Monitor cycles</div>
+                <div className="stat-value">{monitor?.cycles_completed ?? 0}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {tab === 'sources' ? (
+        <section className="page-grid sources-page">
+          <div className="panel section">
+            <div className="section-head">
+              <h3>Network Collection</h3>
+              <span>Continuous LAN monitoring</span>
+            </div>
+            <p className="muted source-copy">
+              Live host/port/connection scanning runs in the background. Pause anytime, or force an
+              immediate scan of the current network.
+            </p>
+            <div className="action-bar compact">
+              <button
+                className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={handleToggleMonitor}
+                disabled={monitorBusy}
+              >
+                {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                {monitorBusy
+                  ? 'Updating…'
+                  : monitor?.enabled
+                    ? 'Pause Monitoring'
+                    : 'Resume Monitoring'}
+              </button>
+              <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
+                <Radar size={16} />
+                {collecting ? 'Scanning now…' : 'Scan Now'}
+              </button>
+              <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
+                <RefreshCw size={16} className={loading ? 'spin' : undefined} />
+                Refresh
+              </button>
+            </div>
+            <div className="source-status mono">
+              <div>
+                Status:{' '}
+                <strong>
+                  {monitor?.scanning
+                    ? 'Scanning…'
+                    : monitor?.enabled
+                      ? 'Monitoring'
+                      : 'Paused'}
+                </strong>
+              </div>
+              <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
+              <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
+              <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
+              <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
+              <div>Last message: {monitor?.last_message || '—'}</div>
+            </div>
+          </div>
+          <IngestPanel onIngested={refresh} onToast={showToast} />
+        </section>
+      ) : null}
 
       {toast ? <div className="toast">{toast}</div> : null}
     </div>
