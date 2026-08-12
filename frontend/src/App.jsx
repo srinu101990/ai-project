@@ -22,9 +22,9 @@ import TopNav from './components/TopNav'
 import SystemMetaRow from './components/SystemMetaRow'
 import CityThreatChart from './components/CityThreatChart'
 import RecentAlerts from './components/RecentAlerts'
-import DemoLabPage from './components/DemoLabPage'
 import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
+import ThreatDefinitions from './components/ThreatDefinitions'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -50,8 +50,6 @@ function App() {
   const [monitorBusy, setMonitorBusy] = useState(false)
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
-  const [injectBusy, setInjectBusy] = useState(false)
-  const [lastInjected, setLastInjected] = useState([])
   const [classifiedType, setClassifiedType] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState([])
@@ -240,29 +238,12 @@ function App() {
         const started = await api.startDemoFeed(30)
         setDemoFeed(started)
         showToast('Threat Demo started — one virus type every 30 seconds')
-        setTab('dashboard')
       }
       await refresh()
     } catch (err) {
       showToast(err.message || 'Could not update demo feed')
     } finally {
       setDemoBusy(false)
-    }
-  }
-
-  async function handleInjectAllThreats() {
-    setInjectBusy(true)
-    try {
-      const result = await api.injectAllDemoThreats()
-      setDemoFeed(result)
-      setLastInjected(result.events || [])
-      showToast(result.last_message || 'All threat types injected and classified')
-      await refresh()
-      setTab('dashboard')
-    } catch (err) {
-      showToast(err.message || 'Demo inject failed')
-    } finally {
-      setInjectBusy(false)
     }
   }
 
@@ -302,6 +283,13 @@ function App() {
   const dateLabel = now
     .toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
     .replace(/\//g, '-')
+  const demoMenuLabel = demoBusy
+    ? 'Updating…'
+    : demoFeed?.enabled
+      ? demoFeed.current_type
+        ? `Stop Demo · ${demoFeed.current_type}`
+        : 'Stop Threat Demo'
+      : 'Threat Demo'
 
   return (
     <div className="app-shell">
@@ -352,15 +340,12 @@ function App() {
         onBellToggle={handleBellToggle}
         onClearNotifications={handleClearNotifications}
         onSelectNotification={handleSelectNotification}
-      />
-      <SystemMetaRow
-        health={health}
-        monitor={monitor}
-        lastRefresh={lastRefresh}
-        demoFeed={demoFeed}
-        onToggleDemo={handleToggleDemoFeed}
+        demoEnabled={Boolean(demoFeed?.enabled)}
         demoBusy={demoBusy}
+        demoLabel={demoMenuLabel}
+        onDemoToggle={handleToggleDemoFeed}
       />
+      <SystemMetaRow health={health} monitor={monitor} lastRefresh={lastRefresh} />
 
       {tab === 'dashboard' ? (
         <>
@@ -426,12 +411,15 @@ function App() {
       ) : null}
 
       {tab === 'threats' ? (
-        <section className="panel section page-panel">
-          <div className="section-head">
-            <h3>Threat Intelligence Feed</h3>
-            <span>Live classified network events</span>
+        <section className="threats-page">
+          <ThreatDefinitions />
+          <div className="panel section page-panel">
+            <div className="section-head">
+              <h3>Threat Intelligence Feed</h3>
+              <span>Live classified network events</span>
+            </div>
+            <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
           </div>
-          <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
         </section>
       ) : null}
 
@@ -528,17 +516,6 @@ function App() {
           </div>
           <IngestPanel onIngested={refresh} onToast={showToast} />
         </section>
-      ) : null}
-
-      {tab === 'demo' ? (
-        <DemoLabPage
-          demoFeed={demoFeed}
-          onInjectAll={handleInjectAllThreats}
-          onToggleAuto={handleToggleDemoFeed}
-          injectBusy={injectBusy}
-          autoBusy={demoBusy}
-          lastInjected={lastInjected}
-        />
       ) : null}
 
       <ThreatPopup items={threatPopups} onDismiss={dismissThreatPopup} />
