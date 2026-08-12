@@ -1,3 +1,5 @@
+import NotificationBell from './NotificationBell'
+
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'threats', label: 'Threat Intelligence' },
@@ -7,19 +9,38 @@ const TABS = [
   { id: 'demo', label: 'Threat Demo' },
 ]
 
-export default function TopNav({ active, onChange }) {
+export default function TopNav({
+  active,
+  onChange,
+  unreadCount = 0,
+  notifications = [],
+  bellOpen = false,
+  onBellToggle,
+  onClearNotifications,
+  onSelectNotification,
+}) {
   return (
     <nav className="top-nav" aria-label="Main sections">
-      {TABS.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          className={`nav-tab ${active === tab.id ? 'active' : ''}`}
-          onClick={() => onChange(tab.id)}
-        >
-          {tab.label}
-        </button>
-      ))}
+      <div className="top-nav-tabs">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`nav-tab ${active === tab.id ? 'active' : ''}`}
+            onClick={() => onChange(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <NotificationBell
+        count={unreadCount}
+        open={bellOpen}
+        notifications={notifications}
+        onToggle={onBellToggle}
+        onClear={onClearNotifications}
+        onSelect={onSelectNotification}
+      />
     </nav>
   )
 }

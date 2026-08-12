@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Brain,
   CheckCircle2,
@@ -24,6 +24,7 @@ import CityThreatChart from './components/CityThreatChart'
 import RecentAlerts from './components/RecentAlerts'
 import DemoLabPage from './components/DemoLabPage'
 import RemediationPanel from './components/RemediationPanel'
+import ThreatPopup from './components/ThreatPopup'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -52,12 +53,85 @@ function App() {
   const [injectBusy, setInjectBusy] = useState(false)
   const [lastInjected, setLastInjected] = useState([])
   const [classifiedType, setClassifiedType] = useState(null)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notifications, setNotifications] = useState([])
+  const [bellOpen, setBellOpen] = useState(false)
+  const [threatPopups, setThreatPopups] = useState([])
+  const knownThreatIds = useRef(null)
+  const popupTimers = useRef(new Map())
   const now = useClock()
 
   const showToast = useCallback((message) => {
     setToast(message)
     window.setTimeout(() => setToast(''), 4200)
   }, [])
+
+  const dismissThreatPopup = useCallback((popupId) => {
+    setThreatPopups((prev) => prev.filter((item) => item.popupId !== popupId))
+    const timer = popupTimers.current.get(popupId)
+    if (timer) {
+      window.clearTimeout(timer)
+      popupTimers.current.delete(popupId)
+    }
+  }, [])
+
+  const pushThreatPopups = useCallback(
+    (incoming) => {
+      const stamped = incoming.map((threat, index) => ({
+        ...threat,
+        popupId: `${threat.id}-${Date.now()}-${index}`,
+      }))
+      setThreatPopups((prev) => [...stamped, ...prev].slice(0, 4))
+      stamped.forEach((item) => {
+        const timer = window.setTimeout(() => dismissThreatPopup(item.popupId), 6500)
+        popupTimers.current.set(item.popupId, timer)
+      })
+    },
+    [dismissThreatPopup],
+  )
+
+  const registerNewDetections = useCallback(
+    (threatData) => {
+      const ids = new Set((threatData || []).map((threat) => threat.id))
+      if (knownThreatIds.current === null) {
+        knownThreatIds.current = ids
+        return
+      }
+      const fresh = (threatData || []).filter((threat) => !knownThreatIds.current.has(threat.id))
+      knownThreatIds.current = ids
+      if (!fresh.length) return
+
+      const newestFirst = [...fresh].reverse()
+      setUnreadCount((count) => count + newestFirst.length)
+      setNotifications((prev) => [...newestFirst, ...prev].slice(0, 20))
+      pushThreatPopups(newestFirst.slice(0, 3))
+    },
+    [pushThreatPopups],
+  )
+
+  const handleBellToggle = useCallback((nextOpen) => {
+    setBellOpen(nextOpen)
+  }, [])
+
+  const handleClearNotifications = useCallback(() => {
+    setUnreadCount(0)
+    setNotifications([])
+    setBellOpen(false)
+  }, [])
+
+  const handleSelectNotification = useCallback(() => {
+    setUnreadCount(0)
+    setBellOpen(false)
+    setTab('threats')
+  }, [])
+
+  useEffect(
+    () => () => {
+      popupTimers.current.forEach((timer) => window.clearTimeout(timer))
+      popupTimers.current.clear()
+    },
+    [],
+  )
 
   const refresh = useCallback(async () => {
     try {
@@ -76,13 +150,14 @@ function App() {
       if (healthData) setHealth(healthData)
       if (monitorData) setMonitor(monitorData)
       if (demoData) setDemoFeed(demoData)
+      registerNewDetections(threatData)
       setLastRefresh(new Date())
     } catch (err) {
       showToast(err.message || 'Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
-  }, [showToast])
+  }, [registerNewDetections, showToast])
 
   useEffect(() => {
     refresh()
@@ -268,7 +343,16 @@ function App() {
         </div>
       </header>
 
-      <TopNav active={tab} onChange={setTab} />
+      <TopNav
+        active={tab}
+        onChange={setTab}
+        unreadCount={unreadCount}
+        notifications={notifications}
+        bellOpen={bellOpen}
+        onBellToggle={handleBellToggle}
+        onClearNotifications={handleClearNotifications}
+        onSelectNotification={handleSelectNotification}
+      />
       <SystemMetaRow
         health={health}
         monitor={monitor}
@@ -457,6 +541,7 @@ function App() {
         />
       ) : null}
 
+      <ThreatPopup items={threatPopups} onDismiss={dismissThreatPopup} />
       {toast ? <div className="toast">{toast}</div> : null}
     </div>
   )
