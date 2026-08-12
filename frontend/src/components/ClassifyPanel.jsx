@@ -3,18 +3,46 @@ import { BrainCircuit } from 'lucide-react'
 import { api } from '../api'
 
 const SAMPLES = [
-  'File infector virus Win32/Expiro detected sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00',
-  'Worm WannaCry self-replicating across SMB shares on the LAN',
-  'Banking trojan Emotet downloaded via malicious Office macro',
-  'LockBit ransomware locked files as .locked and demanded crypto payment',
-  'Spyware Pegasus exfiltrating contacts messages location from mobile endpoint',
-  'Remote access trojan AsyncRAT opened unauthorized remote control session',
-  'Cryptominer XMRig unauthorized mining sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-  'Urgent action required: verify your account and click the login portal link',
+  {
+    label: 'Virus',
+    text: 'File infector virus Win32/Expiro detected sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00',
+  },
+  {
+    label: 'Worm',
+    text: 'Worm WannaCry self-replicating across SMB shares on the LAN',
+  },
+  {
+    label: 'Trojan',
+    text: 'Banking trojan Emotet downloaded via malicious Office macro',
+  },
+  {
+    label: 'Ransomware',
+    text: 'LockBit ransomware locked files as .locked and demanded crypto payment',
+  },
+  {
+    label: 'Spyware',
+    text: 'Spyware Pegasus exfiltrating contacts messages location from mobile endpoint',
+  },
+  {
+    label: 'RAT',
+    text: 'Remote access trojan AsyncRAT opened unauthorized remote control session',
+  },
+  {
+    label: 'Keylogger',
+    text: 'Keylogger Agent Tesla keystroke logging sha256:11223344556677889900aabbccddeeff00112233445566778899aabbccddeeff',
+  },
+  {
+    label: 'Cryptominer',
+    text: 'Cryptominer XMRig unauthorized mining sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+  },
+  {
+    label: 'Phishing',
+    text: 'Urgent action required: verify your account and click the login portal link',
+  },
 ]
 
 export default function ClassifyPanel({ onToast, onClassified }) {
-  const [text, setText] = useState(SAMPLES[0])
+  const [text, setText] = useState(SAMPLES[0].text)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -52,13 +80,13 @@ export default function ClassifyPanel({ onToast, onClassified }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
           {SAMPLES.map((sample) => (
             <button
-              key={sample}
+              key={sample.label}
               type="button"
               className="btn btn-ghost"
               style={{ fontSize: '0.78rem', padding: '0.4rem 0.65rem' }}
-              onClick={() => setText(sample)}
+              onClick={() => setText(sample.text)}
             >
-              {sample.split(' ').slice(0, 3).join(' ')}…
+              {sample.label}
             </button>
           ))}
         </div>
