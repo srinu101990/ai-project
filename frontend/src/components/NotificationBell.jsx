@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Bell } from 'lucide-react'
 
 export default function NotificationBell({
@@ -11,6 +12,7 @@ export default function NotificationBell({
 }) {
   const rootRef = useRef(null)
   const buttonRef = useRef(null)
+  const panelRef = useRef(null)
   const [panelStyle, setPanelStyle] = useState(null)
 
   useLayoutEffect(() => {
@@ -33,6 +35,7 @@ export default function NotificationBell({
         left: `${left}px`,
         width: `${width}px`,
         maxHeight: `${Math.max(160, window.innerHeight - top - 12)}px`,
+        zIndex: 10000,
       })
     }
 
@@ -48,9 +51,10 @@ export default function NotificationBell({
   useEffect(() => {
     if (!open) return undefined
     function onPointerDown(event) {
-      if (rootRef.current && !rootRef.current.contains(event.target)) {
-        onToggle(false)
-      }
+      const target = event.target
+      const inBell = rootRef.current?.contains(target)
+      const inPanel = panelRef.current?.contains(target)
+      if (!inBell && !inPanel) onToggle(false)
     }
     function onKeyDown(event) {
       if (event.key === 'Escape') onToggle(false)
@@ -64,6 +68,56 @@ export default function NotificationBell({
   }, [open, onToggle])
 
   const badge = count > 99 ? '99+' : String(count)
+
+  const panel =
+    open && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={panelRef}
+            className="notif-panel"
+            role="dialog"
+            aria-label="New detections"
+            style={panelStyle || undefined}
+          >
+            <div className="notif-panel-head">
+              <strong>New Detections</strong>
+              <button
+                type="button"
+                className="notif-clear"
+                onClick={onClear}
+                disabled={count === 0}
+              >
+                Clear
+              </button>
+            </div>
+            {notifications.length === 0 ? (
+              <div className="notif-empty">No new detections</div>
+            ) : (
+              <ul className="notif-list">
+                {notifications.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className="notif-item"
+                      onClick={() => onSelect?.(item)}
+                    >
+                      <span className={`badge ${item.threat_type}`}>{item.threat_type}</span>
+                      <span className="notif-item-body">
+                        <strong>{item.source || 'Unknown source'}</strong>
+                        <span className="mono muted">
+                          {(item.severity || 'info').toUpperCase()}
+                          {item.protocol ? ` · ${item.protocol}` : ''}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>,
+          document.body,
+        )
+      : null
 
   return (
     <div className="notif-bell-wrap" ref={rootRef}>
@@ -79,46 +133,7 @@ export default function NotificationBell({
         <Bell size={18} />
         {count > 0 ? <span className="notif-badge">{badge}</span> : null}
       </button>
-
-      {open ? (
-        <div
-          className="notif-panel"
-          role="dialog"
-          aria-label="New detections"
-          style={panelStyle || undefined}
-        >
-          <div className="notif-panel-head">
-            <strong>New Detections</strong>
-            <button type="button" className="notif-clear" onClick={onClear} disabled={count === 0}>
-              Clear
-            </button>
-          </div>
-          {notifications.length === 0 ? (
-            <div className="notif-empty">No new detections</div>
-          ) : (
-            <ul className="notif-list">
-              {notifications.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className="notif-item"
-                    onClick={() => onSelect?.(item)}
-                  >
-                    <span className={`badge ${item.threat_type}`}>{item.threat_type}</span>
-                    <span className="notif-item-body">
-                      <strong>{item.source || 'Unknown source'}</strong>
-                      <span className="mono muted">
-                        {(item.severity || 'info').toUpperCase()}
-                        {item.protocol ? ` · ${item.protocol}` : ''}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
+      {panel}
     </div>
   )
 }
