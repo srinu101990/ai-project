@@ -54,7 +54,6 @@ function App() {
   const [bellOpen, setBellOpen] = useState(false)
   const [threatPopups, setThreatPopups] = useState([])
   const knownThreatIds = useRef(null)
-  const popupTimers = useRef(new Map())
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -64,27 +63,16 @@ function App() {
 
   const dismissThreatPopup = useCallback((popupId) => {
     setThreatPopups((prev) => prev.filter((item) => item.popupId !== popupId))
-    const timer = popupTimers.current.get(popupId)
-    if (timer) {
-      window.clearTimeout(timer)
-      popupTimers.current.delete(popupId)
-    }
   }, [])
 
-  const pushThreatPopups = useCallback(
-    (incoming) => {
-      const stamped = incoming.map((threat, index) => ({
-        ...threat,
-        popupId: `${threat.id}-${Date.now()}-${index}`,
-      }))
-      setThreatPopups((prev) => [...stamped, ...prev].slice(0, 4))
-      stamped.forEach((item) => {
-        const timer = window.setTimeout(() => dismissThreatPopup(item.popupId), 6500)
-        popupTimers.current.set(item.popupId, timer)
-      })
-    },
-    [dismissThreatPopup],
-  )
+  const pushThreatPopups = useCallback((incoming) => {
+    const stamped = incoming.map((threat, index) => ({
+      ...threat,
+      popupId: `${threat.id}-${Date.now()}-${index}`,
+    }))
+    // Keep newest first; modal shows one at a time until the user closes it.
+    setThreatPopups((prev) => [...stamped, ...prev].slice(0, 8))
+  }, [])
 
   const registerNewDetections = useCallback(
     (threatData) => {
@@ -100,7 +88,7 @@ function App() {
       const newestFirst = [...fresh].reverse()
       setUnreadCount((count) => count + newestFirst.length)
       setNotifications((prev) => [...newestFirst, ...prev].slice(0, 20))
-      pushThreatPopups(newestFirst.slice(0, 3))
+      pushThreatPopups(newestFirst)
     },
     [pushThreatPopups],
   )
@@ -120,14 +108,6 @@ function App() {
     setBellOpen(false)
     setTab('threats')
   }, [])
-
-  useEffect(
-    () => () => {
-      popupTimers.current.forEach((timer) => window.clearTimeout(timer))
-      popupTimers.current.clear()
-    },
-    [],
-  )
 
   const refresh = useCallback(async () => {
     try {
