@@ -13,6 +13,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Virus',
     evidence: 'Detection/family name + SHA-256 hash',
     examples: 'Win32/Expiro, Generic.Virus',
+    behavior:
+      'A virus attaches to legitimate files or programs and activates when those files run. It can corrupt data, spread to shared folders, and leave a detectable family signature plus SHA-256 hash for the sample.',
     steps: [
       'Record the AV detection/family name and full SHA-256 of the sample.',
       'Quarantine or delete infected files after backup verification.',
@@ -25,6 +27,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Worm',
     evidence: 'Family name, e.g. WannaCry',
     examples: 'WannaCry, Conficker',
+    behavior:
+      'A worm self-replicates across the network without user action, often through exposed SMB/RDP services. Families like WannaCry spread laterally quickly and can encrypt or disrupt many hosts in minutes.',
     steps: [
       'Identify the worm family (e.g. WannaCry) from EDR/IDS alerts.',
       'Segment the LAN and disable vulnerable SMB/RDP exposure.',
@@ -37,6 +41,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Trojan',
     evidence: 'Family name, e.g. Emotet',
     examples: 'Emotet, TrickBot',
+    behavior:
+      'A trojan disguises itself as a useful app or document (for example Emotet macros) while secretly stealing credentials, downloading extra malware, or opening attacker access on the endpoint.',
     steps: [
       'Confirm the trojan family (e.g. Emotet) from detection telemetry.',
       'Remove the trojanized installer/app and related Office macros.',
@@ -49,6 +55,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Ransomware',
     evidence: 'Family name, e.g. LockBit',
     examples: 'LockBit, Conti, WannaCry',
+    behavior:
+      'Ransomware encrypts files and demands payment for a decryption key. Families such as LockBit often delete backups/shadow copies, drop a ransom note, and try to spread across the LAN.',
     steps: [
       'Note the ransomware family (e.g. LockBit) from the ransom note/EDR.',
       'Disconnect infected systems from LAN/Wi-Fi to stop lateral spread.',
@@ -61,6 +69,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Spyware',
     evidence: 'Family name, e.g. Pegasus',
     examples: 'Pegasus, DarkHotel',
+    behavior:
+      'Spyware secretly monitors devices and exfiltrates private data such as messages, contacts, location, or screen activity. Advanced families like Pegasus can operate with very little visible user impact.',
     steps: [
       'Record the spyware family (e.g. Pegasus) and affected device IDs.',
       'Revoke sessions/tokens; assume monitored data may be compromised.',
@@ -73,6 +83,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Adware',
     evidence: 'Detection/family name',
     examples: 'Bundlore, Adware.Generic',
+    behavior:
+      'Adware injects unwanted ads, hijacks browser settings, or tracks browsing to generate revenue. It often arrives bundled with freeware and may open the door to riskier PUPs.',
     steps: [
       'Capture the adware detection/family name from AV reports.',
       'Remove unwanted browser extensions and reset hijacked homepage/search.',
@@ -85,6 +97,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Rootkit',
     evidence: 'Rootkit family/name',
     examples: 'TDSS, ZeroAccess',
+    behavior:
+      'A rootkit hides processes, drivers, or files at a deep system level so attackers remain invisible to normal tools. Families like TDSS/ZeroAccess can conceal other malware and resist ordinary cleanup.',
     steps: [
       'Identify the rootkit family/name (e.g. TDSS, ZeroAccess).',
       'Boot to trusted media and scan offline for hidden drivers.',
@@ -97,6 +111,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Bot / Botnet malware',
     evidence: 'Family name, e.g. Mirai',
     examples: 'Mirai, Emotet botnet',
+    behavior:
+      'Botnet malware recruits devices into a remotely controlled swarm. Families such as Mirai commonly target IoT cameras/routers with weak credentials and then launch floods or spam on command.',
     steps: [
       'Confirm the botnet family (e.g. Mirai) from IoT/EDR telemetry.',
       'Isolate recruited hosts/cameras from the production network.',
@@ -109,6 +125,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Keylogger',
     evidence: 'Family/name + hash',
     examples: 'Agent Tesla, Formbook',
+    behavior:
+      'A keylogger records typed keystrokes to steal passwords, banking details, and messages. Families like Agent Tesla often also capture clipboard data and screenshots, then send them to attacker C2.',
     steps: [
       'Record keylogger family/name and SHA-256 from quarantine.',
       'Force password resets for accounts used while it was active.',
@@ -121,6 +139,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'RAT (Remote Access Trojan)',
     evidence: 'Family name, e.g. AsyncRAT',
     examples: 'AsyncRAT, njRAT, Quasar',
+    behavior:
+      'A Remote Access Trojan gives attackers interactive control of the victim PC—viewing the screen, running commands, transferring files, and installing more tools. AsyncRAT and similar families persist quietly for long-term access.',
     steps: [
       'Identify the RAT family (e.g. AsyncRAT) and active remote sessions.',
       'Kill RAT processes and revoke unauthorized remote-access tools.',
@@ -133,6 +153,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Downloader / Dropper',
     evidence: 'Family/name + hash',
     examples: 'Guloader, SmokeLoader',
+    behavior:
+      'Downloaders and droppers are first-stage malware whose job is to fetch or unpack a more dangerous second payload. Families like Guloader/SmokeLoader often arrive by phishing and then pull trojans or ransomware.',
     steps: [
       'Record downloader/dropper family and SHA-256.',
       'Block the hash and related delivery URLs on gateway/EDR.',
@@ -145,6 +167,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Backdoor',
     evidence: 'Family/name + hash',
     examples: 'Cobalt Strike, China Chopper',
+    behavior:
+      'A backdoor maintains covert long-term access so attackers can return later. This includes Cobalt Strike beacons and webshells like China Chopper that accept remote commands without normal authentication.',
     steps: [
       'Capture backdoor family/name and SHA-256 (beacon/webshell).',
       'Remove Cobalt Strike beacons / China Chopper webshells.',
@@ -157,6 +181,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Fileless malware',
     evidence: 'Technique/family name',
     examples: 'PowerShell Empire, living-off-the-land',
+    behavior:
+      'Fileless malware runs mainly in memory or abuses trusted OS tools (PowerShell, WMI) so little is written to disk. Living-off-the-land techniques make it harder for traditional antivirus to catch.',
     steps: [
       'Document the technique/family (e.g. PowerShell Empire, LotL).',
       'Capture memory and review PowerShell/WMI script block logs.',
@@ -169,6 +195,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Cryptominer malware',
     evidence: 'Family/name + hash',
     examples: 'XMRig, Lemon Duck',
+    behavior:
+      'Cryptominer malware hijacks CPU/GPU resources to mine cryptocurrency for the attacker. Families such as XMRig cause high resource usage, heat, and performance loss while quietly contacting mining pools.',
     steps: [
       'Record miner family/name and SHA-256 (e.g. XMRig).',
       'Kill mining processes and remove persistence jobs/services.',
@@ -181,12 +209,16 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Malware (generic)',
     evidence: 'Detection/family name + hash when available',
     examples: 'Uncategorized malware',
+    behavior:
+      'Generic malware covers malicious software that does not yet match a more specific family. It may damage systems, steal data, or prepare the host for further attacker tools.',
     steps: MALWARE_BASE,
   },
   phishing: {
     title: 'Phishing',
     evidence: 'Sender, lure URL, and credential-harvest indicators',
     examples: 'Fake login portals, invoice lures',
+    behavior:
+      'Phishing uses deceptive emails or messages to trick users into clicking malicious links, opening payloads, or entering credentials on fake login pages. It is often the entry point for malware delivery.',
     steps: [
       'Do not click suspicious links or open unexpected attachments.',
       'Reset passwords for any account mentioned in the lure and enable MFA.',
@@ -199,6 +231,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'DDoS',
     evidence: 'Flood protocol, source ranges, and capacity metrics',
     examples: 'SYN/UDP/HTTP floods',
+    behavior:
+      'A DDoS attack floods a network or service with traffic until capacity is exhausted and legitimate users are denied access. It may use botnets and SYN, UDP, or HTTP flood techniques.',
     steps: [
       'Enable rate-limiting and geo/IP blocking on the edge firewall/WAF.',
       'Scale or fail-over to scrubbing / CDN protection if available.',
@@ -211,6 +245,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Brute Force',
     evidence: 'Target account, source IPs, failed-auth counts',
     examples: 'Password spray, credential stuffing',
+    behavior:
+      'Brute-force attacks repeatedly guess passwords or reuse leaked credentials against login services (SSH, RDP, VPN) until access is forced open.',
     steps: [
       'Temporarily lock the targeted accounts and force password resets.',
       'Enable MFA and account lockout after repeated failed logins.',
@@ -223,6 +259,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Social Engineering',
     evidence: 'Impersonated identity and requested action',
     examples: 'CEO fraud, help-desk scam',
+    behavior:
+      'Social engineering manipulates people—not systems—into breaking policy, sharing MFA codes, or approving fraudulent payments by impersonating trusted roles.',
     steps: [
       'Verify unusual payment/MFA requests through a known secondary channel.',
       'Revoke any access or tokens shared during the impersonation attempt.',
@@ -235,6 +273,8 @@ export const REMEDIATION_BY_TYPE = {
     title: 'Benign',
     evidence: 'No malicious family/hash indicators',
     examples: 'Normal traffic / operations',
+    behavior:
+      'Benign activity matches normal operations with no malicious family, hash, or attack indicators. Keep monitoring so true anomalies still stand out.',
     steps: [
       'No active incident response required for this sample.',
       'Continue routine monitoring of network and endpoint telemetry.',
@@ -266,6 +306,7 @@ export const VIRUS_EVIDENCE_CATALOG = [
   title: REMEDIATION_BY_TYPE[id].title,
   evidence: REMEDIATION_BY_TYPE[id].evidence,
   examples: REMEDIATION_BY_TYPE[id].examples,
+  behavior: REMEDIATION_BY_TYPE[id].behavior,
 }))
 
 export function remediationFor(threatType) {
