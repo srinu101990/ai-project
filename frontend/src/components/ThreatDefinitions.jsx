@@ -14,7 +14,6 @@ import {
   MonitorSmartphone,
   Network,
   Pickaxe,
-  ShieldAlert,
   Siren,
   Skull,
   Users,
@@ -29,7 +28,6 @@ const VIRUS_CATALOG = [
     title: 'Virus',
     color: 'var(--threat-virus)',
     Icon: Bug,
-    evidence: 'Detection/family name + SHA-256 hash',
     description: 'File-infecting malware such as Win32/Expiro that attaches to host programs.',
   },
   {
@@ -37,7 +35,6 @@ const VIRUS_CATALOG = [
     title: 'Worm',
     color: 'var(--threat-worm)',
     Icon: Worm,
-    evidence: 'Family name, e.g. WannaCry',
     description: 'Self-replicating malware that spreads across networks without user action.',
   },
   {
@@ -45,7 +42,6 @@ const VIRUS_CATALOG = [
     title: 'Trojan',
     color: 'var(--threat-trojan)',
     Icon: Skull,
-    evidence: 'Family name, e.g. Emotet',
     description: 'Disguised malicious programs that steal data or open attacker access.',
   },
   {
@@ -53,7 +49,6 @@ const VIRUS_CATALOG = [
     title: 'Ransomware',
     color: 'var(--threat-ransomware)',
     Icon: LockKeyhole,
-    evidence: 'Family name, e.g. LockBit',
     description: 'Encrypts files and demands payment, locking victims out until a ransom is paid.',
   },
   {
@@ -61,7 +56,6 @@ const VIRUS_CATALOG = [
     title: 'Spyware',
     color: 'var(--threat-spyware)',
     Icon: Eye,
-    evidence: 'Family name, e.g. Pegasus',
     description: 'Secretly monitors activity and exfiltrates personal or corporate data.',
   },
   {
@@ -69,7 +63,6 @@ const VIRUS_CATALOG = [
     title: 'Adware',
     color: 'var(--threat-adware)',
     Icon: MonitorSmartphone,
-    evidence: 'Detection/family name',
     description: 'Unwanted software that injects ads, hijacks browsers, or tracks installs.',
   },
   {
@@ -77,7 +70,6 @@ const VIRUS_CATALOG = [
     title: 'Rootkit',
     color: 'var(--threat-rootkit)',
     Icon: Ghost,
-    evidence: 'Rootkit family/name',
     description: 'Hides processes, drivers, or files to conceal attacker presence.',
   },
   {
@@ -85,7 +77,6 @@ const VIRUS_CATALOG = [
     title: 'Bot / Botnet',
     color: 'var(--threat-botnet)',
     Icon: Bot,
-    evidence: 'Family name, e.g. Mirai',
     description: 'Compromised devices controlled as a swarm for floods or spam.',
   },
   {
@@ -93,7 +84,6 @@ const VIRUS_CATALOG = [
     title: 'Keylogger',
     color: 'var(--threat-keylogger)',
     Icon: Fingerprint,
-    evidence: 'Family/name + hash',
     description: 'Captures keystrokes to steal credentials and sensitive input.',
   },
   {
@@ -101,7 +91,6 @@ const VIRUS_CATALOG = [
     title: 'RAT',
     color: 'var(--threat-rat)',
     Icon: Crosshair,
-    evidence: 'Family name, e.g. AsyncRAT',
     description: 'Remote Access Trojans that give attackers interactive control of hosts.',
   },
   {
@@ -109,7 +98,6 @@ const VIRUS_CATALOG = [
     title: 'Downloader / Dropper',
     color: 'var(--threat-downloader)',
     Icon: Download,
-    evidence: 'Family/name + hash',
     description: 'Fetches or unpacks secondary payloads after initial compromise.',
   },
   {
@@ -117,7 +105,6 @@ const VIRUS_CATALOG = [
     title: 'Backdoor',
     color: 'var(--threat-backdoor)',
     Icon: HardDrive,
-    evidence: 'Family/name + hash',
     description: 'Persistent covert access channel such as Cobalt Strike or webshells.',
   },
   {
@@ -125,7 +112,6 @@ const VIRUS_CATALOG = [
     title: 'Fileless Malware',
     color: 'var(--threat-fileless)',
     Icon: Binary,
-    evidence: 'Technique/family name',
     description: 'Runs in memory or via living-off-the-land tools to evade disk scanners.',
   },
   {
@@ -133,7 +119,6 @@ const VIRUS_CATALOG = [
     title: 'Cryptominer',
     color: 'var(--threat-cryptominer)',
     Icon: Pickaxe,
-    evidence: 'Family/name + hash',
     description: 'Hijacks CPU/GPU resources for unauthorized cryptocurrency mining.',
   },
 ]
@@ -145,7 +130,6 @@ const NETWORK_CATALOG = [
     title: 'Phishing',
     color: 'var(--threat-phishing)',
     Icon: Fish,
-    evidence: 'Lure / credential harvest indicators',
     description: 'Deceptive messages that trick users into revealing credentials or installing payloads.',
   },
   {
@@ -153,7 +137,6 @@ const NETWORK_CATALOG = [
     title: 'DDoS',
     color: 'var(--threat-ddos)',
     Icon: Wifi,
-    evidence: 'Flood / capacity exhaustion indicators',
     description: 'Floods networks or services with traffic to exhaust capacity and deny availability.',
   },
   {
@@ -161,7 +144,6 @@ const NETWORK_CATALOG = [
     title: 'Brute Force',
     color: 'var(--threat-brute)',
     Icon: KeyRound,
-    evidence: 'Repeated auth failures',
     description: 'Repeated login attempts that guess passwords until access is forced open.',
   },
   {
@@ -169,29 +151,26 @@ const NETWORK_CATALOG = [
     title: 'Social Engineering',
     color: 'var(--threat-social)',
     Icon: Users,
-    evidence: 'Human manipulation indicators',
     description: 'Manipulates people into breaking security procedures or sharing sensitive access.',
   },
 ]
 
-function ThreatCard({ id, title, color, Icon, evidence, description, index }) {
+function ThreatCard({ id, title, color, Icon, description, index }) {
   return (
     <article
-      key={id}
       className="threat-def-card panel"
       style={{ '--accent': color, animationDelay: `${index * 0.03}s` }}
     >
       <header className="threat-def-head">
         <span className="threat-def-icon">
-          <Icon size={18} />
+          <Icon size={14} />
         </span>
         <h3>{title}</h3>
       </header>
       <div className="threat-def-art" aria-hidden="true">
-        <Icon size={48} strokeWidth={1.25} />
+        <Icon size={34} strokeWidth={1.35} />
         <div className="threat-def-ring" />
       </div>
-      <p className="threat-def-evidence mono">{evidence}</p>
       <p>{description}</p>
     </article>
   )
@@ -204,7 +183,7 @@ export default function ThreatDefinitions() {
         <h3>
           <Siren size={16} /> Virus & Malware Catalog
         </h3>
-        <span>Family / detection evidence used by the classifier</span>
+        <span>Core malware families classified by the platform</span>
       </div>
       <section className="threat-defs threat-defs-dense" aria-label="Virus and malware definitions">
         {VIRUS_CATALOG.map((item, index) => (
