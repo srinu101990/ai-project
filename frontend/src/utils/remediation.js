@@ -1,24 +1,36 @@
 /** Precautions / rectification steps shown after AI classification. */
 
+const MALWARE_BASE = [
+  'Isolate the affected endpoint from the network immediately.',
+  'Capture memory/disk evidence and quarantine the sample.',
+  'Block related hashes, domains, and C2 destinations.',
+  'Patch the exploited software and rotate local/admin credentials.',
+  'Hunt for persistence before reconnecting the host.',
+]
+
 export const REMEDIATION_BY_TYPE = {
-  phishing: {
-    title: 'Phishing — Precautions & Rectification',
+  virus: {
+    title: 'Virus — Precautions & Rectification',
     steps: [
-      'Do not click suspicious links or open unexpected attachments.',
-      'Reset passwords for any account mentioned in the lure and enable MFA.',
-      'Quarantine the email and report it to the security / SOC team.',
-      'Block the sender domain and related malicious URLs on the gateway.',
-      'Run awareness reminder for users about urgent payment/login scams.',
+      'Quarantine infected files and record detection/family + SHA-256.',
+      ...MALWARE_BASE.slice(0, 3),
+      'Restore clean copies from backup after verifying hash integrity.',
     ],
   },
-  malware: {
-    title: 'Malware — Precautions & Rectification',
+  worm: {
+    title: 'Worm — Precautions & Rectification',
     steps: [
-      'Isolate the affected endpoint from the network immediately.',
-      'Kill suspicious processes and remove dropped executables/.dll payloads.',
-      'Run a full EDR/antivirus scan and restore from a clean backup if needed.',
-      'Block C2 / reverse-shell destinations on firewall and proxy.',
-      'Patch the exploited software and rotate local/admin credentials.',
+      'Segment the LAN and disable vulnerable SMB/RDP exposure (e.g. WannaCry paths).',
+      'Patch wormable services and block lateral movement ports.',
+      ...MALWARE_BASE.slice(1, 4),
+    ],
+  },
+  trojan: {
+    title: 'Trojan — Precautions & Rectification',
+    steps: [
+      'Remove the trojanized installer/app (e.g. Emotet) and related macros.',
+      'Reset credentials that may have been harvested.',
+      ...MALWARE_BASE.slice(0, 3),
     ],
   },
   ransomware: {
@@ -29,6 +41,106 @@ export const REMEDIATION_BY_TYPE = {
       'Disable SMB where possible and revoke exposed RDP/VPN sessions.',
       'Restore critical files from offline / immutable backups.',
       'Hunt for persistence (scheduled tasks, services) before reconnecting hosts.',
+    ],
+  },
+  spyware: {
+    title: 'Spyware — Precautions & Rectification',
+    steps: [
+      'Revoke sessions/tokens and assume monitored data may be compromised (e.g. Pegasus).',
+      'Factory-reset or reimage high-risk mobile/endpoints when needed.',
+      'Block exfiltration destinations and rotate credentials.',
+      ...MALWARE_BASE.slice(0, 2),
+    ],
+  },
+  adware: {
+    title: 'Adware — Precautions & Rectification',
+    steps: [
+      'Remove unwanted browser extensions and reset hijacked homepage/search.',
+      'Scan for Bundlore/Adware.Generic remnants and PUP installers.',
+      'Enforce software allow-listing for future installs.',
+    ],
+  },
+  rootkit: {
+    title: 'Rootkit — Precautions & Rectification',
+    steps: [
+      'Boot to trusted media and scan offline for TDSS/ZeroAccess-class rootkits.',
+      'Reimage if kernel integrity cannot be restored.',
+      'Verify Secure Boot / driver signing after cleanup.',
+      ...MALWARE_BASE.slice(0, 2),
+    ],
+  },
+  botnet: {
+    title: 'Bot / Botnet — Precautions & Rectification',
+    steps: [
+      'Isolate IoT/hosts recruited into Mirai-like botnets.',
+      'Change default device credentials and patch firmware.',
+      'Block C2 and sinkhole known botnet domains.',
+      'Monitor for continued bot herder callbacks.',
+    ],
+  },
+  keylogger: {
+    title: 'Keylogger — Precautions & Rectification',
+    steps: [
+      'Force password resets for accounts used while the keylogger was active.',
+      'Remove Agent Tesla/Formbook-class loaders and related hashes.',
+      'Enable MFA everywhere and review recent auth logs.',
+      ...MALWARE_BASE.slice(0, 2),
+    ],
+  },
+  rat: {
+    title: 'RAT — Precautions & Rectification',
+    steps: [
+      'Kill AsyncRAT/njRAT sessions and revoke remote access tools.',
+      'Block C2 and rotate any credentials exposed during remote control.',
+      ...MALWARE_BASE,
+    ],
+  },
+  downloader: {
+    title: 'Downloader / Dropper — Precautions & Rectification',
+    steps: [
+      'Block the downloader family/hash (e.g. Guloader, SmokeLoader).',
+      'Hunt for stage-2 payloads already dropped on disk/memory.',
+      ...MALWARE_BASE.slice(0, 3),
+    ],
+  },
+  backdoor: {
+    title: 'Backdoor — Precautions & Rectification',
+    steps: [
+      'Remove webshells / Cobalt Strike beacons and related hashes.',
+      'Rotate service accounts and close exposed management ports.',
+      ...MALWARE_BASE,
+    ],
+  },
+  fileless: {
+    title: 'Fileless Malware — Precautions & Rectification',
+    steps: [
+      'Capture memory and review PowerShell/WMI living-off-the-land activity.',
+      'Disable risky script hosts where policy allows.',
+      'Clear malicious WMI subscriptions and scheduled tasks.',
+      'Reboot into a known-good state after containment.',
+    ],
+  },
+  cryptominer: {
+    title: 'Cryptominer — Precautions & Rectification',
+    steps: [
+      'Kill XMRig/Lemon Duck mining processes and remove persistence.',
+      'Block mining pools and related hashes on egress firewall.',
+      'Investigate the initial access path that installed the miner.',
+      'Monitor CPU/GPU baselines after cleanup.',
+    ],
+  },
+  malware: {
+    title: 'Malware — Precautions & Rectification',
+    steps: MALWARE_BASE,
+  },
+  phishing: {
+    title: 'Phishing — Precautions & Rectification',
+    steps: [
+      'Do not click suspicious links or open unexpected attachments.',
+      'Reset passwords for any account mentioned in the lure and enable MFA.',
+      'Quarantine the email and report it to the security / SOC team.',
+      'Block the sender domain and related malicious URLs on the gateway.',
+      'Run awareness reminder for users about urgent payment/login scams.',
     ],
   },
   ddos: {

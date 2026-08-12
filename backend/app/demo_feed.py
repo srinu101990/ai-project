@@ -1,4 +1,4 @@
-"""Demo threat lab — separate module for presentation injections.
+"""Demo threat lab — timed sequential injections for presentations.
 
 Supports:
 - inject-all (one-shot every type)
@@ -17,26 +17,34 @@ from .classifier import classifier
 from .config import DEMO_FEED_AUTO_START, DEMO_FEED_INTERVAL_SECONDS
 from .database import SessionLocal
 from .models import ThreatEvent
+from .threat_types import SEVERITY_BY_TYPE
 
 DEMO_SAMPLES = [
     {
-        "threat_hint": "phishing",
-        "source": "Email Gateway",
-        "protocol": "SMTP",
+        "threat_hint": "virus",
+        "source": "AV Quarantine",
+        "protocol": "TCP",
         "payloads": [
-            "Urgent action required: verify your account and click the login portal link",
-            "Your password expired. Reset credentials via the bank account login page",
-            "Credential harvest attempt via fake password reset email",
+            "File infector virus Win32/Expiro detected sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
+            "Polymorphic virus family Generic.Virus with SHA-256 hash in quarantine report",
         ],
     },
     {
-        "threat_hint": "malware",
-        "source": "Endpoint Detection Agent",
-        "protocol": "TCP",
+        "threat_hint": "worm",
+        "source": "Network IDS Sensor",
+        "protocol": "SMB",
         "payloads": [
-            "Executable download of trojan dropper with registry persistence",
-            "PowerShell -enc base64 payload launched reverse shell to C2 beacon",
-            "Suspicious process performed DLL injection and worm propagation",
+            "Worm WannaCry self-replicating across SMB shares on the LAN",
+            "Conficker worm lateral spread worm activity observed",
+        ],
+    },
+    {
+        "threat_hint": "trojan",
+        "source": "Endpoint Detection Agent",
+        "protocol": "HTTPS",
+        "payloads": [
+            "Banking trojan Emotet downloaded via malicious Office macro",
+            "Trojan TrickBot credential theft module installed",
         ],
     },
     {
@@ -44,9 +52,107 @@ DEMO_SAMPLES = [
         "source": "Network IDS Sensor",
         "protocol": "SMB",
         "payloads": [
+            "LockBit ransomware locked files as .locked and demanded crypto payment",
             "Your files have been encrypted. Pay bitcoin wallet for decryption key",
-            "Ransom note: shadow copies deleted, readme_for_decrypt found",
-            "Ransomware locked files as .locked and demanded bitcoin wallet payment",
+        ],
+    },
+    {
+        "threat_hint": "spyware",
+        "source": "Mobile Threat Defense",
+        "protocol": "HTTPS",
+        "payloads": [
+            "Spyware Pegasus exfiltrating contacts messages location from mobile endpoint",
+            "Screen capture spyware stalkerware telemetry to unknown C2",
+        ],
+    },
+    {
+        "threat_hint": "adware",
+        "source": "Browser Protection",
+        "protocol": "HTTPS",
+        "payloads": [
+            "Adware Bundlore browser hijacker injecting popup ads",
+            "Unwanted adware detection family Adware.Generic changing homepage",
+        ],
+    },
+    {
+        "threat_hint": "rootkit",
+        "source": "Kernel Integrity Monitor",
+        "protocol": "TCP",
+        "payloads": [
+            "Kernel-mode rootkit TDSS hiding malicious driver",
+            "ZeroAccess rootkit family concealing processes",
+        ],
+    },
+    {
+        "threat_hint": "botnet",
+        "source": "IoT Security Gateway",
+        "protocol": "TCP",
+        "payloads": [
+            "Mirai IoT botnet recruiting cameras into command-and-control botnet",
+            "Botnet bot herder pushing new attack modules",
+        ],
+    },
+    {
+        "threat_hint": "keylogger",
+        "source": "Endpoint Detection Agent",
+        "protocol": "TCP",
+        "payloads": [
+            "Keylogger Agent Tesla keystroke logging sha256:11223344556677889900aabbccddeeff00112233445566778899aabbccddeeff",
+            "Formbook keylogger captured credentials keylog buffer flushed to C2",
+        ],
+    },
+    {
+        "threat_hint": "rat",
+        "source": "EDR Telemetry",
+        "protocol": "TCP",
+        "payloads": [
+            "Remote access trojan AsyncRAT opened unauthorized remote control session",
+            "njRAT remote access trojan persistence on workstation",
+        ],
+    },
+    {
+        "threat_hint": "downloader",
+        "source": "Email Gateway",
+        "protocol": "HTTPS",
+        "payloads": [
+            "Downloader Guloader stage-2 payload download sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            "SmokeLoader dropper downloaded secondary malware executable",
+        ],
+    },
+    {
+        "threat_hint": "backdoor",
+        "source": "Web Application Firewall",
+        "protocol": "HTTPS",
+        "payloads": [
+            "Backdoor Cobalt Strike beacon sha256:99887766554433221100ffeeddccbbaa99887766554433221100ffeeddccbbaa",
+            "China Chopper webshell backdoor planted on IIS server",
+        ],
+    },
+    {
+        "threat_hint": "fileless",
+        "source": "PowerShell Audit",
+        "protocol": "WMI",
+        "payloads": [
+            "Fileless PowerShell Empire living-off-the-land in-memory payload",
+            "WMI persistence fileless technique with in-memory shellcode",
+        ],
+    },
+    {
+        "threat_hint": "cryptominer",
+        "source": "Host Resource Monitor",
+        "protocol": "TCP",
+        "payloads": [
+            "Cryptominer XMRig unauthorized mining sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "Lemon Duck coinminer Monero mining on compromised host",
+        ],
+    },
+    {
+        "threat_hint": "phishing",
+        "source": "Email Gateway",
+        "protocol": "SMTP",
+        "payloads": [
+            "Urgent action required: verify your account and click the login portal link",
+            "Credential harvest attempt via fake password reset email",
         ],
     },
     {
@@ -54,9 +160,8 @@ DEMO_SAMPLES = [
         "source": "Firewall Flow Logs",
         "protocol": "TCP",
         "payloads": [
-            "DDoS SYN flood from botnet traffic exhausting bandwidth capacity",
+            "DDoS SYN flood exhausting bandwidth capacity on edge firewall",
             "HTTP flood denial of service against public web portal",
-            "UDP flood distributed denial attack saturating edge routers",
         ],
     },
     {
@@ -66,7 +171,6 @@ DEMO_SAMPLES = [
         "payloads": [
             "Repeated login attempts and password spray against VPN gateway",
             "SSH auth failures indicate brute force password guessing",
-            "RDP login failures with credential stuffing from external hosts",
         ],
     },
     {
@@ -76,30 +180,9 @@ DEMO_SAMPLES = [
         "payloads": [
             "Social engineering call impersonating help desk scam for MFA codes",
             "CEO fraud email asking staff to wire transfer urgently",
-            "Gift card social engineering request from fake executive",
-        ],
-    },
-    {
-        "threat_hint": "benign",
-        "source": "Web Proxy",
-        "protocol": "HTTPS",
-        "payloads": [
-            "Normal outbound HTTPS traffic to corporate CDN",
-            "Scheduled backup completed successfully on file server",
-            "DNS lookup for known software update domain",
         ],
     },
 ]
-
-SEVERITY_OVERRIDE = {
-    "ransomware": "critical",
-    "malware": "high",
-    "ddos": "high",
-    "brute-force": "high",
-    "phishing": "medium",
-    "social": "medium",
-    "benign": "low",
-}
 
 
 def _random_ip(private: bool = True) -> str:
@@ -116,8 +199,11 @@ def _build_event(sample: dict[str, Any]) -> ThreatEvent:
         threat_type = "benign"
     elif threat_type == "benign":
         threat_type = sample["threat_hint"]
+    else:
+        # Prefer the demo sample's intended family when ML is uncertain.
+        threat_type = sample["threat_hint"]
 
-    severity = SEVERITY_OVERRIDE.get(threat_type, result.severity)
+    severity = SEVERITY_BY_TYPE.get(threat_type, result.severity)
     indicators = list(result.indicators or [])
     indicators.append(f"demo:{sample['threat_hint']}")
 

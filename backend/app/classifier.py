@@ -13,28 +13,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
-# v2 model includes ddos / brute force / social classes.
-MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier_v2.joblib"
+from .threat_types import SEVERITY_BY_TYPE, THREAT_TYPES
 
-THREAT_TYPES = (
-    "phishing",
-    "malware",
-    "ransomware",
-    "ddos",
-    "brute-force",
-    "social",
-    "benign",
-)
-
-SEVERITY_BY_TYPE = {
-    "ransomware": "critical",
-    "malware": "high",
-    "ddos": "high",
-    "phishing": "medium",
-    "brute-force": "high",
-    "social": "medium",
-    "benign": "low",
-}
+# v3 model includes expanded malware family classes.
+MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier_v3.joblib"
 
 PHISHING_PATTERNS = [
     (r"verify\s+(your\s+)?account", "verify account"),
@@ -46,22 +28,31 @@ PHISHING_PATTERNS = [
     (r"bank\s+account", "bank account mention"),
     (r"update\s+(billing|payment)", "billing update lure"),
     (r"http[s]?://[^\s]*login", "login URL"),
-    (r"credential", "credential harvest"),
+    (r"credential\s+harvest", "credential harvest"),
 ]
 
-MALWARE_PATTERNS = [
-    (r"executable\s+download", "executable download"),
-    (r"\.exe\b", "exe artifact"),
-    (r"powershell\s+-enc", "encoded PowerShell"),
-    (r"base64\s+payload", "base64 payload"),
-    (r"reverse\s+shell", "reverse shell"),
-    (r"c2\s+beacon", "C2 beacon"),
-    (r"trojan", "trojan"),
-    (r"worm\b", "worm"),
-    (r"dropper", "dropper"),
-    (r"suspicious\s+process", "suspicious process"),
-    (r"registry\s+persistence", "registry persistence"),
-    (r"dll\s+injection", "DLL injection"),
+VIRUS_PATTERNS = [
+    (r"\bvirus\b", "virus keyword"),
+    (r"file\s+infector", "file infector"),
+    (r"win32/expiro|expiro", "Expiro family"),
+    (r"polymorphic\s+virus", "polymorphic virus"),
+    (r"sha-?256", "SHA-256 hash"),
+]
+
+WORM_PATTERNS = [
+    (r"\bworm\b", "worm keyword"),
+    (r"wannacry", "WannaCry family"),
+    (r"conficker", "Conficker family"),
+    (r"self[- ]replicat", "self-replication"),
+    (r"lateral\s+spread\s+worm", "lateral worm spread"),
+]
+
+TROJAN_PATTERNS = [
+    (r"\btrojan\b", "trojan keyword"),
+    (r"emotet", "Emotet family"),
+    (r"trickbot", "TrickBot family"),
+    (r"banking\s+trojan", "banking trojan"),
+    (r"trojanized\s+(installer|app)", "trojanized installer"),
 ]
 
 RANSOMWARE_PATTERNS = [
@@ -72,9 +63,102 @@ RANSOMWARE_PATTERNS = [
     (r"\.locked\b", "locked file extension"),
     (r"your\s+files\s+have\s+been", "files encrypted notice"),
     (r"pay\s+(in\s+)?crypto", "crypto payment demand"),
-    (r"file\s+encryption\s+started", "encryption started"),
+    (r"lockbit", "LockBit family"),
     (r"shadow\s+copies\s+deleted", "shadow copies deleted"),
     (r"readme_for_decrypt", "decrypt readme note"),
+]
+
+SPYWARE_PATTERNS = [
+    (r"\bspyware\b", "spyware keyword"),
+    (r"pegasus", "Pegasus family"),
+    (r"stalkerware", "stalkerware"),
+    (r"screen\s+capture\s+spyware", "screen capture spyware"),
+    (r"exfiltrat(e|ion)\s+(contacts|messages|location)", "privacy exfiltration"),
+]
+
+ADWARE_PATTERNS = [
+    (r"\badware\b", "adware keyword"),
+    (r"bundlore", "Bundlore family"),
+    (r"unwanted\s+adware", "unwanted adware"),
+    (r"popup\s+ads?\s+injector", "popup ad injector"),
+    (r"browser\s+hijack(er|ing)", "browser hijacker"),
+]
+
+ROOTKIT_PATTERNS = [
+    (r"\brootkit\b", "rootkit keyword"),
+    (r"tdss|alureon", "TDSS family"),
+    (r"zeroaccess", "ZeroAccess family"),
+    (r"kernel[- ]mode\s+rootkit", "kernel-mode rootkit"),
+    (r"hidden\s+driver\s+rootkit", "hidden driver rootkit"),
+]
+
+BOTNET_PATTERNS = [
+    (r"\bbotnet\b", "botnet keyword"),
+    (r"\bmirai\b", "Mirai family"),
+    (r"bot\s+herder", "bot herder"),
+    (r"command[- ]and[- ]control\s+botnet", "C2 botnet"),
+    (r"iot\s+botnet", "IoT botnet"),
+]
+
+KEYLOGGER_PATTERNS = [
+    (r"\bkeylogger\b", "keylogger keyword"),
+    (r"agent\s*tesla", "Agent Tesla family"),
+    (r"formbook", "Formbook family"),
+    (r"keystroke\s+logging", "keystroke logging"),
+    (r"captured\s+credentials\s+keylog", "captured credentials"),
+]
+
+RAT_PATTERNS = [
+    (r"\brat\b|remote\s+access\s+trojan", "RAT keyword"),
+    (r"asyncrat", "AsyncRAT family"),
+    (r"njrat|quasar\s*rat", "njRAT/Quasar family"),
+    (r"remote\s+desktop\s+session\s+hijack", "remote session hijack"),
+    (r"unauthorized\s+remote\s+control", "unauthorized remote control"),
+]
+
+DOWNLOADER_PATTERNS = [
+    (r"\bdropper\b", "dropper keyword"),
+    (r"\bdownloader\b", "downloader keyword"),
+    (r"guloader|smokeloader", "loader family"),
+    (r"stage[- ]?2\s+payload\s+download", "stage-2 download"),
+    (r"downloaded\s+secondary\s+malware", "secondary malware download"),
+]
+
+BACKDOOR_PATTERNS = [
+    (r"\bbackdoor\b", "backdoor keyword"),
+    (r"cobalt\s*strike", "Cobalt Strike family"),
+    (r"china\s*chopper", "China Chopper family"),
+    (r"persistent\s+backdoor", "persistent backdoor"),
+    (r"webshell\s+backdoor", "webshell backdoor"),
+]
+
+FILELESS_PATTERNS = [
+    (r"fileless", "fileless keyword"),
+    (r"living[- ]off[- ]the[- ]land|lotl", "living-off-the-land"),
+    (r"powershell\s+empire", "PowerShell Empire"),
+    (r"wmi\s+persistence\s+fileless", "WMI fileless persistence"),
+    (r"in[- ]memory\s+(payload|shellcode)", "in-memory payload"),
+]
+
+CRYPTOMINER_PATTERNS = [
+    (r"cryptominer|crypto[- ]?miner|coinminer", "cryptominer keyword"),
+    (r"xmrig", "XMRig family"),
+    (r"lemon\s*duck", "Lemon Duck family"),
+    (r"unauthorized\s+mining", "unauthorized mining"),
+    (r"monero\s+mining", "Monero mining"),
+]
+
+GENERIC_MALWARE_PATTERNS = [
+    (r"executable\s+download", "executable download"),
+    (r"\.exe\b", "exe artifact"),
+    (r"powershell\s+-enc", "encoded PowerShell"),
+    (r"base64\s+payload", "base64 payload"),
+    (r"reverse\s+shell", "reverse shell"),
+    (r"c2\s+beacon", "C2 beacon"),
+    (r"suspicious\s+process", "suspicious process"),
+    (r"registry\s+persistence", "registry persistence"),
+    (r"dll\s+injection", "DLL injection"),
+    (r"\bmalware\b", "malware keyword"),
 ]
 
 DDOS_PATTERNS = [
@@ -84,7 +168,6 @@ DDOS_PATTERNS = [
     (r"udp\s+flood", "UDP flood"),
     (r"http\s+flood", "HTTP flood"),
     (r"traffic\s+flood", "traffic flood"),
-    (r"botnet\s+traffic", "botnet traffic"),
     (r"exhaust(ed|ing)?\s+(bandwidth|capacity)", "capacity exhaustion"),
     (r"deny\s+of\s+service|denial\s+of\s+service", "denial of service"),
 ]
@@ -111,6 +194,28 @@ SOCIAL_PATTERNS = [
     (r"manipulate(d|s)?\s+(employee|staff|user)", "user manipulation"),
 ]
 
+RULE_GROUPS: dict[str, list[tuple[str, str]]] = {
+    "phishing": PHISHING_PATTERNS,
+    "virus": VIRUS_PATTERNS,
+    "worm": WORM_PATTERNS,
+    "trojan": TROJAN_PATTERNS,
+    "ransomware": RANSOMWARE_PATTERNS,
+    "spyware": SPYWARE_PATTERNS,
+    "adware": ADWARE_PATTERNS,
+    "rootkit": ROOTKIT_PATTERNS,
+    "botnet": BOTNET_PATTERNS,
+    "keylogger": KEYLOGGER_PATTERNS,
+    "rat": RAT_PATTERNS,
+    "downloader": DOWNLOADER_PATTERNS,
+    "backdoor": BACKDOOR_PATTERNS,
+    "fileless": FILELESS_PATTERNS,
+    "cryptominer": CRYPTOMINER_PATTERNS,
+    "malware": GENERIC_MALWARE_PATTERNS,
+    "ddos": DDOS_PATTERNS,
+    "brute-force": BRUTE_FORCE_PATTERNS,
+    "social": SOCIAL_PATTERNS,
+}
+
 
 @dataclass
 class ClassificationResult:
@@ -131,14 +236,7 @@ def _rule_score(text: str, patterns: Iterable[tuple[str, str]]) -> tuple[float, 
 
 
 def rule_based_classify(text: str) -> ClassificationResult:
-    scores = {
-        "phishing": _rule_score(text, PHISHING_PATTERNS),
-        "malware": _rule_score(text, MALWARE_PATTERNS),
-        "ransomware": _rule_score(text, RANSOMWARE_PATTERNS),
-        "ddos": _rule_score(text, DDOS_PATTERNS),
-        "brute-force": _rule_score(text, BRUTE_FORCE_PATTERNS),
-        "social": _rule_score(text, SOCIAL_PATTERNS),
-    }
+    scores = {name: _rule_score(text, patterns) for name, patterns in RULE_GROUPS.items()}
     best_type = max(scores, key=lambda k: scores[k][0])
     best_score, indicators = scores[best_type]
 
@@ -153,7 +251,7 @@ def rule_based_classify(text: str) -> ClassificationResult:
     confidence = round(min(0.99, 0.55 + best_score * 0.4), 3)
     return ClassificationResult(
         threat_type=best_type,
-        severity=SEVERITY_BY_TYPE[best_type],
+        severity=SEVERITY_BY_TYPE.get(best_type, "medium"),
         confidence=confidence,
         indicators=indicators[:8],
     )
@@ -163,33 +261,62 @@ def _training_corpus() -> tuple[list[str], list[str]]:
     samples = [
         ("Urgent action required: verify your account and click the login portal link", "phishing"),
         ("Your password expired. Reset credentials via the bank account login page", "phishing"),
-        ("Suspicious login detected. Update billing payment immediately", "phishing"),
-        ("Please click here to verify your account before it is locked", "phishing"),
         ("Credential harvest attempt via fake password reset email", "phishing"),
-        ("Executable download of trojan dropper with registry persistence", "malware"),
-        ("PowerShell -enc base64 payload launched reverse shell to C2 beacon", "malware"),
-        ("Suspicious process performed DLL injection and worm propagation", "malware"),
-        ("Malware dropper wrote .exe and established C2 beacon", "malware"),
-        ("Trojan executable download with registry persistence keys", "malware"),
+        (
+            "File infector virus Win32/Expiro detected sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
+            "virus",
+        ),
+        (
+            "Polymorphic virus family Generic.Virus with SHA-256 hash in quarantine report",
+            "virus",
+        ),
+        ("Worm WannaCry self-replicating across SMB shares on the LAN", "worm"),
+        ("Conficker worm lateral spread worm activity observed", "worm"),
+        ("Banking trojan Emotet downloaded via malicious Office macro", "trojan"),
+        ("Trojan TrickBot credential theft module installed", "trojan"),
         ("Your files have been encrypted. Pay bitcoin wallet for decryption key", "ransomware"),
-        ("Ransom note: shadow copies deleted, readme_for_decrypt found", "ransomware"),
-        ("File encryption started across documents. Decrypt key sold for crypto", "ransomware"),
-        ("Ransomware locked files as .locked and demanded bitcoin wallet payment", "ransomware"),
-        ("Encrypted drive ransom: pay in crypto for decryption key", "ransomware"),
-        ("DDoS SYN flood from botnet traffic exhausting bandwidth capacity", "ddos"),
+        ("LockBit ransomware locked files as .locked and demanded crypto payment", "ransomware"),
+        ("Spyware Pegasus exfiltrating contacts messages location from mobile endpoint", "spyware"),
+        ("Screen capture spyware stalkerware telemetry to unknown C2", "spyware"),
+        ("Adware Bundlore browser hijacker injecting popup ads", "adware"),
+        ("Unwanted adware detection family Adware.Generic changing homepage", "adware"),
+        ("Kernel-mode rootkit TDSS hiding malicious driver", "rootkit"),
+        ("ZeroAccess rootkit family concealing processes", "rootkit"),
+        ("Mirai IoT botnet recruiting cameras into command-and-control botnet", "botnet"),
+        ("Botnet bot herder pushing new attack modules", "botnet"),
+        (
+            "Keylogger Agent Tesla keystroke logging sha256:11223344556677889900aabbccddeeff00112233445566778899aabbccddeeff",
+            "keylogger",
+        ),
+        ("Formbook keylogger captured credentials keylog buffer flushed to C2", "keylogger"),
+        ("Remote access trojan AsyncRAT opened unauthorized remote control session", "rat"),
+        ("njRAT remote access trojan persistence on workstation", "rat"),
+        (
+            "Downloader Guloader stage-2 payload download sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            "downloader",
+        ),
+        ("SmokeLoader dropper downloaded secondary malware executable", "downloader"),
+        (
+            "Backdoor Cobalt Strike beacon sha256:99887766554433221100ffeeddccbbaa99887766554433221100ffeeddccbbaa",
+            "backdoor",
+        ),
+        ("China Chopper webshell backdoor planted on IIS server", "backdoor"),
+        ("Fileless PowerShell Empire living-off-the-land in-memory payload", "fileless"),
+        ("WMI persistence fileless technique with in-memory shellcode", "fileless"),
+        (
+            "Cryptominer XMRig unauthorized mining sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "cryptominer",
+        ),
+        ("Lemon Duck coinminer Monero mining on compromised host", "cryptominer"),
+        ("Executable download of suspicious malware with registry persistence", "malware"),
+        ("PowerShell -enc base64 payload launched reverse shell to C2 beacon", "malware"),
+        ("DDoS SYN flood exhausting bandwidth capacity on edge firewall", "ddos"),
         ("HTTP flood denial of service against public web portal", "ddos"),
-        ("UDP flood distributed denial attack saturating edge routers", "ddos"),
-        ("Botnet traffic flood attempting to exhaust capacity of API gateway", "ddos"),
         ("Repeated login attempts and password spray against VPN gateway", "brute-force"),
         ("SSH auth failures indicate brute force password guessing", "brute-force"),
-        ("RDP login failures with credential stuffing from external hosts", "brute-force"),
-        ("Failed authentication storm looks like brute force attack", "brute-force"),
         ("Social engineering call impersonating help desk scam for MFA codes", "social"),
         ("CEO fraud email asking staff to wire transfer urgently", "social"),
-        ("Attacker pretending to be vendor manipulated employee for access", "social"),
-        ("Gift card social engineering request from fake executive", "social"),
         ("Normal outbound HTTPS traffic to corporate CDN", "benign"),
-        ("User opened a shared document in the collaboration suite", "benign"),
         ("Scheduled backup completed successfully on file server", "benign"),
         ("DNS lookup for known software update domain", "benign"),
         ("Employee joined a video conference meeting", "benign"),
@@ -204,7 +331,7 @@ def train_and_persist_model() -> Pipeline:
     pipeline = Pipeline(
         [
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1)),
-            ("clf", LogisticRegression(max_iter=1000)),
+            ("clf", LogisticRegression(max_iter=2000)),
         ]
     )
     pipeline.fit(texts, labels)
@@ -241,7 +368,7 @@ class ThreatClassifier:
             if not indicators and rule_result.threat_type != "benign":
                 indicators = rule_result.indicators
             return ClassificationResult(
-                threat_type=ml_type,
+                threat_type=ml_type if ml_type in THREAT_TYPES else rule_result.threat_type,
                 severity=SEVERITY_BY_TYPE.get(ml_type, "medium"),
                 confidence=round(ml_confidence, 3),
                 indicators=indicators,

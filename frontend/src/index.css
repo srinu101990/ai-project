@@ -74,7 +74,20 @@
   --sky: #3b82f6;
   --ok: #22c55e;
   --threat-malware: #ef4444;
+  --threat-virus: #f43f5e;
+  --threat-worm: #fb7185;
+  --threat-trojan: #ef4444;
   --threat-ransomware: #a855f7;
+  --threat-spyware: #e879f9;
+  --threat-adware: #f472b6;
+  --threat-rootkit: #c084fc;
+  --threat-botnet: #818cf8;
+  --threat-keylogger: #38bdf8;
+  --threat-rat: #f97316;
+  --threat-downloader: #fb923c;
+  --threat-backdoor: #f87171;
+  --threat-fileless: #94a3b8;
+  --threat-cryptominer: #eab308;
   --threat-phishing: #f97316;
   --threat-ddos: #3b82f6;
   --threat-brute: #22d3ee;
@@ -711,6 +724,21 @@ a {
   gap: 0.85rem;
 }
 
+.threat-defs-wrap {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.threat-defs-heading {
+  margin-bottom: 0.15rem;
+}
+
+.threat-defs-heading h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .threat-defs {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -718,18 +746,26 @@ a {
   margin-bottom: 0;
 }
 
+.threat-defs-dense {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.threat-defs-network {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .threat-def-card {
   padding: 0.85rem 0.8rem 0.95rem;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.45rem;
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   box-shadow:
     0 12px 28px rgba(0, 0, 0, 0.35),
     0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
     inset 0 0 28px color-mix(in srgb, var(--accent) 8%, transparent);
   animation: rise 0.7s ease both;
-  min-height: 210px;
+  min-height: 220px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -748,7 +784,7 @@ a {
 
 .threat-def-head h3 {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
@@ -764,12 +800,13 @@ a {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  flex-shrink: 0;
 }
 
 .threat-def-art {
   position: relative;
   flex: 1;
-  min-height: 84px;
+  min-height: 72px;
   display: grid;
   place-items: center;
   color: var(--accent);
@@ -778,18 +815,27 @@ a {
 
 .threat-def-ring {
   position: absolute;
-  width: 72px;
-  height: 72px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   box-shadow: inset 0 0 18px color-mix(in srgb, var(--accent) 18%, transparent);
   animation: ringPulse 3.5s ease-in-out infinite;
 }
 
+.threat-def-evidence {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  opacity: 0.92;
+}
+
 .threat-def-card p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   line-height: 1.45;
 }
 
@@ -1229,7 +1275,20 @@ th {
 
 .badge.phishing { color: #fdba74; background: rgba(249, 115, 22, 0.12); border-color: rgba(249, 115, 22, 0.35); }
 .badge.malware { color: #fca5a5; background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.4); }
+.badge.virus { color: #fda4af; background: rgba(244, 63, 94, 0.14); border-color: rgba(244, 63, 94, 0.4); }
+.badge.worm { color: #fda4af; background: rgba(251, 113, 133, 0.14); border-color: rgba(251, 113, 133, 0.4); }
+.badge.trojan { color: #fca5a5; background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.4); }
 .badge.ransomware { color: #d8b4fe; background: rgba(168, 85, 247, 0.16); border-color: rgba(168, 85, 247, 0.4); }
+.badge.spyware { color: #f0abfc; background: rgba(232, 121, 249, 0.14); border-color: rgba(232, 121, 249, 0.4); }
+.badge.adware { color: #f9a8d4; background: rgba(244, 114, 182, 0.14); border-color: rgba(244, 114, 182, 0.4); }
+.badge.rootkit { color: #d8b4fe; background: rgba(192, 132, 252, 0.14); border-color: rgba(192, 132, 252, 0.4); }
+.badge.botnet { color: #a5b4fc; background: rgba(129, 140, 248, 0.14); border-color: rgba(129, 140, 248, 0.4); }
+.badge.keylogger { color: #7dd3fc; background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.4); }
+.badge.rat { color: #fdba74; background: rgba(249, 115, 22, 0.14); border-color: rgba(249, 115, 22, 0.4); }
+.badge.downloader { color: #fdba74; background: rgba(251, 146, 60, 0.14); border-color: rgba(251, 146, 60, 0.4); }
+.badge.backdoor { color: #fca5a5; background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.4); }
+.badge.fileless { color: #cbd5e1; background: rgba(148, 163, 184, 0.14); border-color: rgba(148, 163, 184, 0.4); }
+.badge.cryptominer { color: #fde047; background: rgba(234, 179, 8, 0.14); border-color: rgba(234, 179, 8, 0.4); }
 .badge.ddos { color: #93c5fd; background: rgba(59, 130, 246, 0.14); border-color: rgba(59, 130, 246, 0.4); }
 .badge.brute-force { color: #67e8f9; background: rgba(34, 211, 238, 0.14); border-color: rgba(34, 211, 238, 0.4); }
 .badge.social { color: #86efac; background: rgba(74, 222, 128, 0.14); border-color: rgba(74, 222, 128, 0.4); }
@@ -1454,7 +1513,9 @@ th {
 
 /* ── Responsive ── */
 @media (max-width: 1200px) {
-  .threat-defs {
+  .threat-defs,
+  .threat-defs-dense,
+  .threat-defs-network {
     grid-template-columns: repeat(3, 1fr);
   }
 
@@ -1526,6 +1587,8 @@ th {
   }
 
   .threat-defs,
+  .threat-defs-dense,
+  .threat-defs-network,
   .meta-row,
   .kpi-row,
   .kpi-row.five,

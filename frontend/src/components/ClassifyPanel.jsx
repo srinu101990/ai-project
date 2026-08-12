@@ -3,12 +3,14 @@ import { BrainCircuit } from 'lucide-react'
 import { api } from '../api'
 
 const SAMPLES = [
+  'File infector virus Win32/Expiro detected sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00',
+  'Worm WannaCry self-replicating across SMB shares on the LAN',
+  'Banking trojan Emotet downloaded via malicious Office macro',
+  'LockBit ransomware locked files as .locked and demanded crypto payment',
+  'Spyware Pegasus exfiltrating contacts messages location from mobile endpoint',
+  'Remote access trojan AsyncRAT opened unauthorized remote control session',
+  'Cryptominer XMRig unauthorized mining sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
   'Urgent action required: verify your account and click the login portal link',
-  'PowerShell -enc base64 payload launched reverse shell to C2 beacon',
-  'Your files have been encrypted. Pay bitcoin wallet for decryption key',
-  'DDoS SYN flood from botnet traffic exhausting bandwidth capacity',
-  'SSH auth failures indicate brute force password guessing',
-  'CEO fraud email asking staff to wire transfer urgently',
 ]
 
 export default function ClassifyPanel({ onToast, onClassified }) {

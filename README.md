@@ -1,6 +1,6 @@
 # CYBER_SENTINEL.AI — AI Cyber Threat Intelligence Dashboard
 
-Full-stack project that **detects threats on your network**, **classifies** them with AI (phishing, malware, ransomware), shows **real-time charts**, and **generates PDF reports** for security decision-making.
+Full-stack project that **detects threats on your network**, **classifies** them with AI across a virus/malware catalog (virus, worm, trojan, ransomware, spyware, adware, rootkit, botnet, keylogger, RAT, downloader, backdoor, fileless, cryptominer) plus phishing / DDoS / brute-force / social engineering, shows **real-time charts**, and **generates PDF reports** for security decision-making.
 
 The UI follows a neon cyber-ops aesthetic: threat definition cards, KPI tiles, log analyzer terminal, distribution donut, and severity density charts.
 
