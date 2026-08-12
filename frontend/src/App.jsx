@@ -20,8 +20,6 @@ import ReportPanel from './components/ReportPanel'
 import LogAnalyzer from './components/LogAnalyzer'
 import TopNav from './components/TopNav'
 import SystemMetaRow from './components/SystemMetaRow'
-import CityThreatChart from './components/CityThreatChart'
-import RecentAlerts from './components/RecentAlerts'
 import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
@@ -401,11 +399,6 @@ function App() {
                 <div className="stat-value">{containedResolved}</div>
               </div>
             </article>
-          </section>
-
-          <section className="dashboard-bottom">
-            <CityThreatChart threats={threats} />
-            <RecentAlerts threats={threats} />
           </section>
         </>
       ) : null}
