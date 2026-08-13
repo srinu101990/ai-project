@@ -25,6 +25,7 @@ import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
 import MailGuardPanel from './components/MailGuardPanel'
 import FileGuardPanel from './components/FileGuardPanel'
+import LaptopMalwarePanel from './components/LaptopMalwarePanel'
 import SetupChecklist from './components/SetupChecklist'
 import ConnectedPCs from './components/ConnectedPCs'
 
@@ -56,6 +57,7 @@ function App() {
   const [agentStatus, setAgentStatus] = useState(null)
   const [mailStatus, setMailStatus] = useState(null)
   const [fileStatus, setFileStatus] = useState(null)
+  const [endpointStatus, setEndpointStatus] = useState(null)
   const [setupStatus, setSetupStatus] = useState(null)
   const [sweeping, setSweeping] = useState(false)
   const [bursting, setBursting] = useState(false)
@@ -133,6 +135,7 @@ function App() {
         agentData,
         mailData,
         fileData,
+        endpointData,
         setupData,
       ] = await Promise.all([
           api.getStats(),
@@ -145,6 +148,7 @@ function App() {
           api.remoteAgents().catch(() => null),
           api.mailStatus().catch(() => null),
           api.fileStatus().catch(() => null),
+          api.endpointStatus().catch(() => null),
           api.setupStatus().catch(() => null),
         ])
       setStats(statsData)
@@ -157,6 +161,7 @@ function App() {
       if (agentData) setAgentStatus(agentData)
       if (mailData) setMailStatus(mailData)
       if (fileData) setFileStatus(fileData)
+      if (endpointData) setEndpointStatus(endpointData)
       if (setupData) setSetupStatus(setupData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
@@ -278,11 +283,11 @@ function App() {
       if (demoFeed?.enabled) {
         const stopped = await api.stopDemoFeed()
         setDemoFeed(stopped)
-        showToast('Threat Demo stopped')
+        showToast('Dummy Demo stopped')
       } else {
         const started = await api.startDemoFeed(30)
         setDemoFeed(started)
-        showToast('Threat Demo started — one virus type every 30 seconds')
+        showToast('Dummy Demo started — fake catalog events, not a live laptop scan')
       }
       await refresh()
     } catch (err) {
@@ -332,9 +337,9 @@ function App() {
     ? 'Updating…'
     : demoFeed?.enabled
       ? demoFeed.current_type
-        ? `Stop Demo · ${demoFeed.current_type}`
-        : 'Stop Threat Demo'
-      : 'Threat Demo'
+        ? `Stop Dummy · ${demoFeed.current_type}`
+        : 'Stop Dummy Demo'
+      : 'Dummy Demo'
 
   return (
     <div className="app-shell">
@@ -486,11 +491,18 @@ function App() {
 
       {tab === 'files' ? (
         <section className="page-grid">
-          <FileGuardPanel
-            onToast={showToast}
-            onChecked={(data) => setClassifiedType(data?.threat_type || null)}
-            fileStatus={fileStatus}
-          />
+          <div className="sources-stack">
+            <LaptopMalwarePanel
+              onToast={showToast}
+              onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+              endpointStatus={endpointStatus}
+            />
+            <FileGuardPanel
+              onToast={showToast}
+              onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+              fileStatus={fileStatus}
+            />
+          </div>
           <RemediationPanel threatType={classifiedType} />
         </section>
       ) : null}

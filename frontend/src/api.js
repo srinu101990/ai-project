@@ -156,6 +156,22 @@ export const api = {
     return response.json()
   },
   setupStatus: () => request('/setup'),
+  endpointStatus: () => request('/endpoint/status'),
+  startEndpointWatch: () =>
+    request('/endpoint/start', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  scanEndpoint: () =>
+    request('/endpoint/scan', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  stopEndpointWatch: () =>
+    request('/endpoint/stop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   updateStatus: (id, status) =>
     request(`/threats/${id}`, {
       method: 'PATCH',

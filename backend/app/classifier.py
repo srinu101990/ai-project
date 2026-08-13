@@ -102,7 +102,7 @@ ROOTKIT_PATTERNS = [
     (r"tdss|alureon", "TDSS family"),
     (r"zeroaccess", "ZeroAccess family"),
     (r"kernel[- ]mode\s+rootkit", "kernel-mode rootkit"),
-    (r"hidden\s+driver\s+rootkit", "hidden driver rootkit"),
+    (r"hidden\s+driver\s+rootkit|hiding\s+(a\s+)?malicious\s+driver", "hidden driver rootkit"),
 ]
 
 BOTNET_PATTERNS = [
@@ -135,6 +135,7 @@ DOWNLOADER_PATTERNS = [
     (r"guloader|smokeloader", "loader family"),
     (r"stage[- ]?2\s+payload\s+download", "stage-2 download"),
     (r"downloaded\s+secondary\s+malware", "secondary malware download"),
+    (r"certutil.*urlcache|bitsadmin.*/transfer", "living-off-the-land downloader"),
 ]
 
 BACKDOOR_PATTERNS = [

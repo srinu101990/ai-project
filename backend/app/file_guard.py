@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from .classifier import classifier
 from .collector import ingest_event
+from .malware_signatures import match_filename
 from .network_scanner import _local_ipv4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -260,6 +261,11 @@ def evaluate_path(path: Path) -> FileVerdict:
         extra.append("PE executable disguised as a document lure")
     elif last_ext not in DANGEROUS_EXTS and _is_pe(path):
         extra.append("executable content hidden in a non-exe file")
+    family_hit = match_filename(name)
+    family_type = None
+    if family_hit:
+        family_type, family_label = family_hit
+        extra.append(family_label)
 
     snippet = ""
     if last_ext in TEXT_EXTS or last_ext in {".html", ".htm"} or "readme" in lower:
@@ -276,11 +282,17 @@ def evaluate_path(path: Path) -> FileVerdict:
         if item not in indicators:
             indicators.append(item)
 
-    if "ransomware" in " ".join(extra).lower() or "ransomware note" in " ".join(extra):
+    if family_type:
+        threat_type = family_type
+    elif "ransomware" in " ".join(extra).lower() or "ransomware note" in " ".join(extra):
         threat_type = "ransomware"
     elif extra and threat_type in {"benign", "social"}:
         if any("ransom" in item for item in extra):
             threat_type = "ransomware"
+        elif last_ext in MACRO_EXTS or "lure" in " ".join(extra).lower():
+            threat_type = "trojan"
+        elif "double extension" in " ".join(extra).lower():
+            threat_type = "downloader"
         else:
             threat_type = "malware"
 

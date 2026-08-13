@@ -1760,6 +1760,36 @@ th {
   color: var(--cyan);
 }
 
+.family-live-grid {
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem;
+}
+
+.family-live-grid li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.family-live-grid li.watching {
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.family-live-grid li.hit {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .report-list {
   margin: 0;
   padding-left: 1.1rem;

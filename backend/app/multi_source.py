@@ -79,20 +79,6 @@ MAIL_PORTS = {25, 110, 143, 465, 587, 993, 995}
 AUTH_PORTS = {22, 3389, 5900, 2222}
 DNS_PORTS = {53}
 
-SUSPICIOUS_PROCESS_HINTS: tuple[tuple[str, str, str], ...] = (
-    ("xmrig", "cryptominer", "XMRig miner process"),
-    ("minerd", "cryptominer", "coin miner process"),
-    ("mimikatz", "malware", "credential dumper"),
-    ("psexec", "malware", "remote execution tool"),
-    ("cobalt", "backdoor", "Cobalt Strike artifact"),
-    ("meterpreter", "rat", "Meterpreter payload"),
-    ("asyncrat", "rat", "AsyncRAT process"),
-    ("njrat", "rat", "njRAT process"),
-    ("guloader", "downloader", "Guloader dropper"),
-    ("emotet", "trojan", "Emotet family"),
-    ("wannacry", "worm", "WannaCry worm"),
-)
-
 
 def host_label(ip: str) -> str:
     """Best-effort hostname + IP for projector-friendly findings."""
@@ -203,61 +189,28 @@ def _sensor_endpoint(local_ip: str) -> tuple[list[NetworkFinding], SensorSnapsho
     findings: list[NetworkFinding] = []
     observed = 0
 
+    from .endpoint_guard import collect_laptop_findings
+
+    live = collect_laptop_findings()
+    observed = len(live)
+    for item in live:
+        findings.append(
+            NetworkFinding(
+                source=source,
+                source_ip=local_ip,
+                destination_ip=None,
+                protocol=item.protocol,
+                raw_payload=item.payload,
+                threat_hint=item.threat_type,
+                severity_hint="high",
+                indicators=list(item.indicators) + ["endpoint-agent", hostname],
+            )
+        )
     if psutil is not None:
         try:
-            processes = list(
-                psutil.process_iter(["name", "cmdline", "pid", "username"])
-            )
-            observed = len(processes)
-            for proc in processes:
-                info = proc.info or {}
-                name = str(info.get("name") or "").lower()
-                cmdline = " ".join(info.get("cmdline") or []).lower()
-                blob = f"{name} {cmdline}"
-                for needle, threat, label in SUSPICIOUS_PROCESS_HINTS:
-                    if needle in blob:
-                        findings.append(
-                            NetworkFinding(
-                                source=source,
-                                source_ip=local_ip,
-                                destination_ip=None,
-                                protocol="PROCESS",
-                                raw_payload=(
-                                    f"Endpoint agent on {hostname} ({local_ip}) detected "
-                                    f"{label}: process {info.get('name')} pid={info.get('pid')}. "
-                                    f"{'PowerShell -enc base64 payload' if 'powershell' in name else blob[:180]}"
-                                ),
-                                threat_hint=threat,
-                                severity_hint="high",
-                                indicators=[
-                                    f"process:{info.get('name')}",
-                                    needle,
-                                    "endpoint-agent",
-                                ],
-                            )
-                        )
-                        break
-                else:
-                    if "powershell" in name and (
-                        "-enc" in cmdline or "bypass" in cmdline or "downloadstring" in cmdline
-                    ):
-                        findings.append(
-                            NetworkFinding(
-                                source=source,
-                                source_ip=local_ip,
-                                destination_ip=None,
-                                protocol="PROCESS",
-                                raw_payload=(
-                                    f"Fileless PowerShell living-off-the-land in-memory payload "
-                                    f"on {hostname} pid={info.get('pid')} command: {cmdline[:160]}"
-                                ),
-                                threat_hint="fileless",
-                                severity_hint="high",
-                                indicators=["powershell", "encoded-command", "endpoint-agent"],
-                            )
-                        )
+            observed = len(list(psutil.process_iter(["pid"])))
         except (psutil.AccessDenied, PermissionError, OSError):
-            observed = 0
+            pass
 
     if not findings:
         findings.append(

@@ -138,15 +138,27 @@ Gmail: enable IMAP, then create an App Password under Google Account → Securit
 
 The connection is saved on this laptop (`data/mail_settings.json`) and resumes when you start the app again.
 
-### Files (malware / ransomware)
+### Files and remaining malware families (this laptop)
 
-Folder watch starts with the app.
+Folder watch and laptop malware watch start with the app. Open **My Laptop**.
 
-1. Open **My Files**
-2. Click **Drop test samples** — harmless labeled files are written to `file_drop/` (and Downloads if that folder exists)
-3. Confirm popups for **RANSOMWARE DETECTED** / **MALWARE DETECTED**
-4. Or copy a suspicious file into Downloads yourself (for example `invoice.pdf.exe`)
-5. Delete the `CYBER_SENTINEL_TEST_*` files after the demo
+Live families (not Dummy Demo): virus, worm, trojan, ransomware, spyware, adware, rootkit, botnet, keylogger, RAT, downloader, backdoor, fileless, cryptominer.
+
+They fire only when this PC actually shows an indicator, for example:
+
+- a miner/RAT/keylogger **process** running
+- **PowerShell -enc** / certutil / bitsadmin (fileless / downloader)
+- classic **RAT/miner listen ports**
+- **SMB spread** to many hosts (worm)
+- **startup / Run-key** persistence
+- **hosts-file** hijack (adware)
+- a suspicious **file** in Downloads / Desktop / Documents
+
+Click **Scan my laptop now** anytime. If nothing malicious is running, the family cards stay on “watching — no live hit”. That is correct.
+
+Dummy Demo in the top bar injects fake catalog text and is optional. Do not use it if you want only live laptop detections.
+
+Optional file check: **Drop test samples** writes harmless labeled files so you can see folder classification. Delete `CYBER_SENTINEL_TEST_*` afterward.
 
 ### Network and other PCs
 
@@ -220,6 +232,8 @@ No root/pcap privileges are required. This is TCP connect scanning + host connec
 - `POST /api/files/start` — start watching laptop folders
 - `POST /api/files/test-sample` — write harmless malware/ransomware test files
 - `GET /api/files/status` — folder watch status
+- `GET /api/endpoint/status` — live laptop malware-family watch
+- `POST /api/endpoint/scan` — scan this laptop processes/ports/persistence now
 - `GET /api/threats` — list threat events
 - `GET /api/stats` — real-time statistics for charts
 - `GET /api/health` — mode, local IP, scan subnet, monitor state

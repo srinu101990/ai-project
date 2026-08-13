@@ -334,3 +334,27 @@ class SetupStatus(BaseModel):
     completed: int
     required: int
     steps: list[SetupStepOut]
+
+
+class MalwareFamilyStatus(BaseModel):
+    id: str
+    title: str
+    channel: str
+    watching: bool = True
+    hits: int = 0
+    last_message: Optional[str] = None
+
+
+class EndpointGuardStatus(BaseModel):
+    enabled: bool
+    scanning: bool = False
+    interval_seconds: int = 12
+    cycles_completed: int = 0
+    last_message: Optional[str] = None
+    last_error: Optional[str] = None
+    last_at: Optional[datetime] = None
+    last_events: int = 0
+    total_hits: int = 0
+    families: list[MalwareFamilyStatus] = []
+    new_events: Optional[int] = None
+    message: Optional[str] = None

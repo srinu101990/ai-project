@@ -4,7 +4,7 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'threats', label: 'Threat Intelligence' },
   { id: 'mail', label: 'My Mail' },
-  { id: 'files', label: 'My Files' },
+  { id: 'files', label: 'My Laptop' },
   { id: 'analyzer', label: 'AI Analyzer' },
   { id: 'reports', label: 'Reports' },
   { id: 'sources', label: 'Sources' },
@@ -44,8 +44,8 @@ export default function TopNav({
           disabled={demoBusy}
           title={
             demoEnabled
-              ? 'Stop sequential threat demo'
-              : 'Start sequential threat demo (one type every 30s)'
+              ? 'Stop dummy catalog feed'
+              : 'Dummy Demo injects fake catalog events — not a live laptop scan'
           }
         >
           {demoBusy ? 'Updating…' : demoLabel}

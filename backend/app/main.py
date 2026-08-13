@@ -22,6 +22,7 @@ from .collector import collect_from_network, ingest_event, projection_burst
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
 from .demo_feed import autostart_demo_feed, demo_feed
+from .endpoint_guard import autostart_endpoint_watch, endpoint_monitor
 from .file_guard import (
     autostart_file_watch,
     check_and_store as check_file_and_store,
@@ -45,6 +46,7 @@ from .schemas import (
     CollectResponse,
     DemoFeedControlRequest,
     DemoFeedStatus,
+    EndpointGuardStatus,
     FileCheckResponse,
     FileScanResponse,
     FileTestSampleResponse,
@@ -98,12 +100,14 @@ async def lifespan(_: FastAPI):
     autostart_demo_feed()
     autostart_mail_watch()
     autostart_file_watch()
+    autostart_endpoint_watch()
     try:
         yield
     finally:
         demo_feed.stop()
         mail_monitor.stop()
         file_monitor.stop()
+        endpoint_monitor.stop()
         monitor.stop()
 
 
@@ -111,8 +115,9 @@ app = FastAPI(
     title="AI Cyber Threat Intelligence Dashboard",
     description=(
         "Collects cyber threat intelligence from multiple live sources at the same time "
-        "(Network IDS, Endpoint, Firewall, DNS, Email, Auth), watches this laptop inbox and "
-        "folders, classifies phishing/malware/ransomware with AI, visualizes real-time stats, "
+        "(Network IDS, Endpoint, Firewall, DNS, Email, Auth), watches this laptop inbox, "
+        "folders, processes, persistence, and ports, classifies phishing/malware/"
+        "ransomware with AI, visualizes real-time stats, "
         "and generates decision-support reports. Runs fully offline after dependencies are installed."
     ),
     version="1.0.0",
@@ -429,11 +434,35 @@ def files_test_sample(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/endpoint/status", response_model=EndpointGuardStatus)
+def endpoint_status():
+    return endpoint_monitor.status()
+
+
+@app.post("/api/endpoint/start", response_model=EndpointGuardStatus)
+def endpoint_start():
+    return endpoint_monitor.start(interval_seconds=12, persist=True)
+
+
+@app.post("/api/endpoint/scan", response_model=EndpointGuardStatus)
+def endpoint_scan():
+    try:
+        return endpoint_monitor.scan_once()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/endpoint/stop", response_model=EndpointGuardStatus)
+def endpoint_stop():
+    return endpoint_monitor.stop(forget=True)
+
+
 @app.get("/api/setup", response_model=SetupStatus)
 def setup_status():
     """First-run checklist for the laptop demo."""
     mail = mail_monitor.status()
     files = file_monitor.status()
+    endpoint = endpoint_monitor.status()
     agents = agent_registry.status()
     steps = [
         SetupStepOut(
@@ -448,6 +477,13 @@ def setup_status():
             title="Watch Downloads / Desktop / Documents",
             done=bool(files.get("enabled")),
             detail=files.get("last_message") or "Starts automatically with the app",
+            tab="files",
+        ),
+        SetupStepOut(
+            id="endpoint",
+            title="Watch this laptop for virus / worm / trojan / RAT / miner / …",
+            done=bool(endpoint.get("enabled")),
+            detail=endpoint.get("last_message") or "Live process, port, and persistence sweep",
             tab="files",
         ),
         SetupStepOut(

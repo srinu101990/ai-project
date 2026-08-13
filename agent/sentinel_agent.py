@@ -26,18 +26,31 @@ import urllib.error
 import urllib.request
 
 SUSPICIOUS = (
-    "xmrig",
-    "minerd",
-    "mimikatz",
-    "psexec",
-    "cobalt",
-    "meterpreter",
-    "asyncrat",
-    "njrat",
-    "emotet",
-    "wannacry",
-    "powershell -enc",
-    "downloadstring",
+    ("xmrig", "cryptominer"),
+    ("minerd", "cryptominer"),
+    ("cgminer", "cryptominer"),
+    ("nicehash", "cryptominer"),
+    ("mimikatz", "spyware"),
+    ("keylog", "keylogger"),
+    ("agenttesla", "keylogger"),
+    ("formbook", "keylogger"),
+    ("asyncrat", "rat"),
+    ("njrat", "rat"),
+    ("quasar", "rat"),
+    ("meterpreter", "rat"),
+    ("emotet", "trojan"),
+    ("trickbot", "trojan"),
+    ("wannacry", "worm"),
+    ("conficker", "worm"),
+    ("guloader", "downloader"),
+    ("smokeloader", "downloader"),
+    ("powershell -enc", "fileless"),
+    ("downloadstring", "fileless"),
+    ("encodedcommand", "fileless"),
+    ("vssadmin delete shadows", "ransomware"),
+    ("psexec", "malware"),
+    ("cobaltstrike", "backdoor"),
+    ("bundlore", "adware"),
 )
 
 
@@ -100,26 +113,31 @@ def build_findings(hostname: str, ip: str) -> list[dict]:
     findings: list[dict] = []
     blob = " ".join(processes).lower()
 
-    for needle in SUSPICIOUS:
+    for needle, family in SUSPICIOUS:
         if needle in blob:
             findings.append(
                 {
                     "protocol": "PROCESS",
                     "raw_payload": (
-                        f"Remote endpoint agent on {hostname} ({ip}) detected suspicious "
-                        f"process indicator '{needle}' among {len(processes)} running "
-                        f"process(es). Possible malware family activity on this PC."
+                        f"Remote endpoint agent on {hostname} ({ip}) detected live "
+                        f"{family} indicator '{needle}' among {len(processes)} running "
+                        f"process(es) on this PC."
                     ),
-                    "indicators": [f"process:{needle}", "remote-agent", hostname],
+                    "indicators": [f"process:{needle}", family, "remote-agent", hostname],
                 }
             )
 
     risky = {
         23: ("Telnet", "malware"),
-        445: ("SMB", "ransomware"),
+        445: ("SMB", "worm"),
         3389: ("RDP", "ransomware"),
-        5900: ("VNC", "malware"),
         4444: ("Metasploit", "rat"),
+        5555: ("RAT", "rat"),
+        6667: ("IRC", "botnet"),
+        12345: ("NetBus", "rat"),
+        31337: ("BackOrifice", "backdoor"),
+        3333: ("Stratum", "cryptominer"),
+        14444: ("XMRig", "cryptominer"),
     }
     for port in listens:
         if port in risky:
@@ -129,10 +147,9 @@ def build_findings(hostname: str, ip: str) -> list[dict]:
                     "protocol": "TCP",
                     "raw_payload": (
                         f"Remote agent on {hostname} ({ip}) reports listening {service} "
-                        f"port {port}. Exposed {service} is a common worm / ransomware / "
-                        f"remote-control path on this PC."
+                        f"port {port}. Live {service} listener is a {_hint} path on this PC."
                     ),
-                    "indicators": [f"listen:{port}", service.lower(), "remote-agent", hostname],
+                    "indicators": [f"listen:{port}", service.lower(), _hint, "remote-agent", hostname],
                 }
             )
 
