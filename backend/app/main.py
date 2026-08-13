@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+import threading
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -83,24 +84,36 @@ def seed_if_empty(db: Session) -> None:
         collect_from_network(db, batch_size=14)
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    # Ensure classifier model is warm (trained/loaded locally).
-    _ = classifier.classify("warmup benign traffic sample")
+def _boot_background_watchers() -> None:
+    """Start watchers after the HTTP server is already accepting requests."""
     from .database import SessionLocal
 
     db = SessionLocal()
     try:
         seed_if_empty(db)
+    except Exception:
+        pass
     finally:
         db.close()
-    # Start continuous LAN monitoring in the background.
     autostart_monitor()
     autostart_demo_feed()
     autostart_mail_watch()
     autostart_file_watch()
     autostart_endpoint_watch()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    try:
+        _ = classifier.classify("warmup benign traffic sample")
+    except Exception:
+        pass
+    threading.Thread(
+        target=_boot_background_watchers,
+        name="sentinel-boot",
+        daemon=True,
+    ).start()
     try:
         yield
     finally:
@@ -152,13 +165,7 @@ def offline_swagger_ui():
 
 @app.get("/api/health")
 def health():
-    subnet = SCAN_SUBNET or None
-    local_ip = None
-    try:
-        local_ip, network = resolve_scan_network()
-        subnet = str(network)
-    except Exception:
-        pass
+    """Liveness probe — no network I/O so Windows startup can open the UI immediately."""
     mon = monitor.status()
     demo = demo_feed.status()
     hub = source_hub.status()
@@ -178,8 +185,8 @@ def health():
         "offline_capable": True,
         "bind_host": BIND_HOST,
         "bind_port": BIND_PORT,
-        "local_ip": local_ip,
-        "scan_subnet": subnet,
+        "local_ip": mon.get("last_local_ip"),
+        "scan_subnet": SCAN_SUBNET or mon.get("last_subnet"),
         "frontend_bundled": FRONTEND_DIST.exists(),
     }
 

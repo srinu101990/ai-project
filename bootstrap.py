@@ -7,6 +7,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import urllib.error
@@ -121,23 +122,53 @@ def main() -> int:
         return 0
 
     env = os.environ.copy()
-    env["BIND_HOST"] = "0.0.0.0"
+    bind_host = "127.0.0.1" if os.name == "nt" else "0.0.0.0"
+    env["BIND_HOST"] = bind_host
     env["BIND_PORT"] = str(port)
     env["COLLECTION_MODE"] = env.get("COLLECTION_MODE") or "network"
+    env["PYTHONUNBUFFERED"] = "1"
     log(f"Starting server on {url} ... keep this window open.")
     proc = subprocess.Popen(
-        [py, "run.py", "--host", "0.0.0.0", "--port", str(port)],
+        [py, "-u", "run.py", "--host", bind_host, "--port", str(port)],
         cwd=str(ROOT / "backend"),
         env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
     )
-    if not wait_health(port):
-        log("ERROR: server did not become ready. Scroll up or open start-offline.log")
-        proc.terminate()
+
+    def _pump() -> None:
+        if not proc.stdout:
+            return
+        for line in proc.stdout:
+            log(line.rstrip())
+
+    threading.Thread(target=_pump, name="server-log", daemon=True).start()
+
+    deadline = time.time() + 45
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            log(f"ERROR: server process exited with code {proc.returncode}")
+            log("The traceback is in the lines above / start-offline.log")
+            return 1
+        if health_ok(port):
+            break
+        time.sleep(0.4)
+    else:
+        log("ERROR: server did not answer http://127.0.0.1:%s/api/health" % port)
+        log("Leave this window open and try that URL in Chrome anyway.")
+        log("If Windows Firewall popped up, click Allow.")
+        # Do not kill a live process — it may still be starting.
         try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        return 1
+            webbrowser.open(url)
+        except Exception:
+            pass
+        try:
+            return int(proc.wait())
+        except KeyboardInterrupt:
+            proc.terminate()
+            return 0
 
     log(f"READY: {url}")
     log("Leave this window open. Closing it stops the dashboard.")

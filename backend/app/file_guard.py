@@ -495,10 +495,7 @@ class FileFolderMonitor:
             self._running = True
             self._thread = threading.Thread(target=self._loop, name="file-folder-watch", daemon=True)
             self._thread.start()
-        try:
-            return self.scan_once()
-        except Exception:
-            return self.status()
+        return self.status()
 
     def stop(self, *, forget: bool = False) -> dict[str, Any]:
         with self._lock:

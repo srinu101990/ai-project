@@ -358,7 +358,10 @@ def train_and_persist_model() -> Pipeline:
 
 def load_model() -> Pipeline:
     if MODEL_PATH.exists():
-        return joblib.load(MODEL_PATH)
+        try:
+            return joblib.load(MODEL_PATH)
+        except Exception:
+            pass
     return train_and_persist_model()
 
 
@@ -366,10 +369,15 @@ class ThreatClassifier:
     """Hybrid AI classifier: ML model + explainable rule indicators."""
 
     def __init__(self) -> None:
-        self.model = load_model()
+        try:
+            self.model = load_model()
+        except Exception:
+            self.model = None
 
     def classify(self, text: str) -> ClassificationResult:
         rule_result = rule_based_classify(text)
+        if self.model is None:
+            return rule_result
         proba = self.model.predict_proba([text])[0]
         classes = list(self.model.classes_)
         ml_idx = int(np.argmax(proba))
