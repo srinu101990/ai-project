@@ -52,6 +52,7 @@ function App() {
   const [demoBusy, setDemoBusy] = useState(false)
   const [sourceStatus, setSourceStatus] = useState(null)
   const [agentStatus, setAgentStatus] = useState(null)
+  const [mailStatus, setMailStatus] = useState(null)
   const [sweeping, setSweeping] = useState(false)
   const [bursting, setBursting] = useState(false)
   const [classifiedType, setClassifiedType] = useState(null)
@@ -126,6 +127,7 @@ function App() {
         demoData,
         sourceData,
         agentData,
+        mailData,
       ] = await Promise.all([
           api.getStats(),
           api.getThreats({ limit: 40 }),
@@ -135,6 +137,7 @@ function App() {
           api.demoFeedStatus().catch(() => null),
           api.liveSources().catch(() => null),
           api.remoteAgents().catch(() => null),
+          api.mailStatus().catch(() => null),
         ])
       setStats(statsData)
       setThreats(threatData)
@@ -144,6 +147,7 @@ function App() {
       if (demoData) setDemoFeed(demoData)
       if (sourceData) setSourceStatus(sourceData)
       if (agentData) setAgentStatus(agentData)
+      if (mailData) setMailStatus(mailData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
     } catch (err) {
@@ -463,6 +467,7 @@ function App() {
           <MailGuardPanel
             onToast={showToast}
             onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+            mailStatus={mailStatus}
           />
           <RemediationPanel threatType={classifiedType} />
         </section>

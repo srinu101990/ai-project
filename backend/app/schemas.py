@@ -252,7 +252,7 @@ class MailImapConnectRequest(BaseModel):
     username: str = Field(..., min_length=3)
     password: str = Field(..., min_length=3)
     mailbox: Optional[str] = "INBOX"
-    interval_seconds: Optional[int] = Field(default=45, ge=20, le=600)
+    interval_seconds: Optional[int] = Field(default=20, ge=15, le=600)
 
 
 class MailImapStatus(BaseModel):
@@ -261,12 +261,14 @@ class MailImapStatus(BaseModel):
     host: str = ""
     username: str = ""
     mailbox: str = "INBOX"
-    interval_seconds: int = 45
+    interval_seconds: int = 20
     cycles_completed: int = 0
     last_message: Optional[str] = None
     last_error: Optional[str] = None
     last_at: Optional[datetime] = None
     last_events: int = 0
+    last_phishing: int = 0
+    total_phishing: int = 0
     drop_dir: str
     new_events: Optional[int] = None
     message: Optional[str] = None

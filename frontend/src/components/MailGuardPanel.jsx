@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MailWarning, ShieldCheck, Upload } from 'lucide-react'
 import { api } from '../api'
 
@@ -18,7 +18,7 @@ const SAMPLE_SAFE = {
     'Hi team, the weekly notes are in the shared drive. No password reset is required. See you in the standup tomorrow.',
 }
 
-export default function MailGuardPanel({ onToast, onChecked }) {
+export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
   const [sender, setSender] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -27,8 +27,22 @@ export default function MailGuardPanel({ onToast, onChecked }) {
   const [imapHost, setImapHost] = useState('imap.gmail.com')
   const [imapUser, setImapUser] = useState('')
   const [imapPass, setImapPass] = useState('')
-  const [imapStatus, setImapStatus] = useState(null)
+  const [imapStatus, setImapStatus] = useState(mailStatus || null)
   const [imapBusy, setImapBusy] = useState(false)
+
+  useEffect(() => {
+    if (mailStatus) setImapStatus(mailStatus)
+  }, [mailStatus])
+
+  useEffect(() => {
+    api.mailStatus()
+      .then((status) => {
+        setImapStatus(status)
+        if (status?.username) setImapUser(status.username)
+        if (status?.host) setImapHost(status.host)
+      })
+      .catch(() => {})
+  }, [])
 
   async function checkMail(payload) {
     setLoading(true)
@@ -69,20 +83,6 @@ export default function MailGuardPanel({ onToast, onChecked }) {
     }
   }
 
-  async function handleDropScan() {
-    setLoading(true)
-    try {
-      const data = await api.scanMailDrop()
-      if (data.last) setResult(data.last)
-      onToast?.(data.message)
-      onChecked?.(data.last)
-    } catch (err) {
-      onToast?.(err.message || 'Drop folder scan failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function handleImapConnect(e) {
     e.preventDefault()
     setImapBusy(true)
@@ -92,11 +92,19 @@ export default function MailGuardPanel({ onToast, onChecked }) {
         username: imapUser,
         password: imapPass,
         mailbox: 'INBOX',
+        interval_seconds: 20,
       })
       setImapStatus(status)
-      onToast?.(status.last_message || 'IMAP watch started')
+      if (status.last_phishing) {
+        onToast?.(`PHISHING DETECTED in ${status.last_phishing} mail(s)`)
+      } else {
+        onToast?.(status.message || status.last_message || 'Inbox watch started')
+      }
     } catch (err) {
-      onToast?.(err.message || 'IMAP connect failed — use an app password, not your main password')
+      onToast?.(
+        err.message ||
+          'Could not open inbox. Enable IMAP and use a Gmail/Outlook app password, not your normal password.',
+      )
     } finally {
       setImapBusy(false)
     }
@@ -107,9 +115,9 @@ export default function MailGuardPanel({ onToast, onChecked }) {
     try {
       const status = await api.pollMailImap()
       setImapStatus(status)
-      onToast?.(status.message || status.last_message || 'Inbox polled')
+      onToast?.(status.message || status.last_message || 'Inbox checked')
     } catch (err) {
-      onToast?.(err.message || 'IMAP poll failed')
+      onToast?.(err.message || 'Inbox poll failed')
     } finally {
       setImapBusy(false)
     }
@@ -120,72 +128,87 @@ export default function MailGuardPanel({ onToast, onChecked }) {
     try {
       const status = await api.stopMailImap()
       setImapStatus(status)
-      onToast?.('IMAP watch stopped')
+      onToast?.('Inbox watch stopped')
     } catch (err) {
-      onToast?.(err.message || 'Could not stop IMAP')
+      onToast?.(err.message || 'Could not stop inbox watch')
     } finally {
       setImapBusy(false)
     }
   }
 
   const phishing = result?.phishing || result?.threat_type === 'phishing'
+  const watching = Boolean(imapStatus?.enabled)
 
   return (
     <div className="panel section mail-guard-panel">
       <div className="section-head">
-        <h3>Laptop Mail Phishing Guard</h3>
-        <span>Step 1 — this PC only</span>
+        <h3>Watch my email inbox</h3>
+        <span>{watching ? 'LIVE — new mail is being checked' : 'Connect Gmail or Outlook'}</span>
       </div>
       <p className="muted source-copy">
-        This does <strong>not</strong> read Gmail/Outlook by itself. Paste a mail, upload a saved
-        .eml, or connect IMAP with an app password. The AI then says if it is phishing.
+        When a new mail arrives, this laptop pulls it from your inbox, classifies it, and pops an
+        alert if it is phishing. Gmail/Outlook will not allow your normal password — use an app
+        password.
       </p>
+      <ol className="mail-steps">
+        <li>Gmail: turn on IMAP in Settings → See all settings → Forwarding and POP/IMAP</li>
+        <li>
+          Google Account → Security → 2-Step Verification → App passwords → create one for Mail
+        </li>
+        <li>Paste your Gmail address and that 16-character app password below, then start watch</li>
+      </ol>
 
-      <form className="form" onSubmit={handleSubmit}>
+      <div className={`mail-watch-banner ${watching ? 'on' : ''}`}>
+        <span className="live-dot" />
+        {watching
+          ? `Watching ${imapStatus.username} every ${imapStatus.interval_seconds}s`
+          : 'Inbox watch is off'}
+        {imapStatus?.last_phishing ? ` · phishing hits: ${imapStatus.last_phishing}` : ''}
+      </div>
+
+      <form className="form" onSubmit={handleImapConnect}>
         <label>
-          From
-          <input value={sender} onChange={(e) => setSender(e.target.value)} placeholder="sender@example.com" />
+          Mail provider
+          <select value={imapHost} onChange={(e) => setImapHost(e.target.value)}>
+            <option value="imap.gmail.com">Gmail (imap.gmail.com)</option>
+            <option value="outlook.office365.com">Outlook / Hotmail (outlook.office365.com)</option>
+          </select>
         </label>
         <label>
-          Subject
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" />
-        </label>
-        <label>
-          Email body
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Paste the full email text from Gmail or Outlook…"
+          Email address
+          <input
+            value={imapUser}
+            onChange={(e) => setImapUser(e.target.value)}
+            placeholder="you@gmail.com"
+            autoComplete="username"
           />
         </label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              setSender(SAMPLE_PHISH.sender)
-              setSubject(SAMPLE_PHISH.subject)
-              setBody(SAMPLE_PHISH.body)
-            }}
-          >
-            Load sample phishing
+        <label>
+          App password
+          <input
+            type="password"
+            value={imapPass}
+            onChange={(e) => setImapPass(e.target.value)}
+            placeholder="16-character app password"
+            autoComplete="current-password"
+          />
+        </label>
+        <div className="action-bar compact">
+          <button className="btn btn-primary" type="submit" disabled={imapBusy || !imapUser || !imapPass}>
+            {imapBusy ? 'Connecting…' : watching ? 'Reconnect inbox' : 'Start watching my inbox'}
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              setSender(SAMPLE_SAFE.sender)
-              setSubject(SAMPLE_SAFE.subject)
-              setBody(SAMPLE_SAFE.body)
-            }}
-          >
-            Load sample safe mail
+          <button type="button" className="btn btn-ghost" onClick={handleImapPoll} disabled={imapBusy || !watching}>
+            Check inbox now
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={handleImapStop} disabled={imapBusy || !watching}>
+            Stop
           </button>
         </div>
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          <MailWarning size={16} />
-          {loading ? 'Checking…' : 'Check this email'}
-        </button>
+        {imapStatus?.last_message ? (
+          <div className="muted mono" style={{ fontSize: '0.78rem' }}>
+            {imapStatus.last_error ? `Error: ${imapStatus.last_error}` : imapStatus.last_message}
+          </div>
+        ) : null}
       </form>
 
       {result ? (
@@ -194,70 +217,68 @@ export default function MailGuardPanel({ onToast, onChecked }) {
           <div>
             <strong>{result.verdict}</strong>
             <div className="muted" style={{ fontSize: '0.85rem' }}>
-              {result.threat_type} · {result.severity} · {Math.round((result.confidence || 0) * 100)}%
-              {result.indicators?.length ? ` · ${result.indicators.join(', ')}` : ''}
+              {result.subject || result.sender || result.threat_type} · {Math.round((result.confidence || 0) * 100)}%
             </div>
           </div>
         </div>
       ) : null}
 
-      <div className="mail-extra">
-        <label className="btn btn-secondary">
-          <Upload size={16} />
-          Upload .eml file
-          <input type="file" accept=".eml,.txt" hidden onChange={handleUpload} />
-        </label>
-        <button type="button" className="btn btn-ghost" onClick={handleDropScan} disabled={loading}>
-          Scan inbox_drop folder
-        </button>
-      </div>
-
-      <form className="form" onSubmit={handleImapConnect} style={{ marginTop: '1rem' }}>
-        <div className="section-head" style={{ padding: 0 }}>
-          <h3 style={{ fontSize: '1rem' }}>Optional: watch my inbox</h3>
-          <span>Gmail / Outlook IMAP</span>
-        </div>
-        <p className="muted source-copy">
-          Gmail: create an App Password, then use imap.gmail.com. Outlook: outlook.office365.com.
-          Do not use your main email password.
-        </p>
-        <label>
-          IMAP host
-          <select value={imapHost} onChange={(e) => setImapHost(e.target.value)}>
-            <option value="imap.gmail.com">Gmail (imap.gmail.com)</option>
-            <option value="outlook.office365.com">Outlook (outlook.office365.com)</option>
-          </select>
-        </label>
-        <label>
-          Email address
-          <input value={imapUser} onChange={(e) => setImapUser(e.target.value)} placeholder="you@gmail.com" />
-        </label>
-        <label>
-          App password
-          <input
-            type="password"
-            value={imapPass}
-            onChange={(e) => setImapPass(e.target.value)}
-            placeholder="App password, not your login password"
-          />
-        </label>
-        <div className="action-bar compact">
-          <button className="btn btn-primary" type="submit" disabled={imapBusy || !imapUser || !imapPass}>
-            {imapBusy ? 'Working…' : 'Start inbox watch'}
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={handleImapPoll} disabled={imapBusy}>
-            Poll now
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={handleImapStop} disabled={imapBusy}>
-            Stop
-          </button>
-        </div>
-        {imapStatus?.last_message ? (
-          <div className="muted mono" style={{ fontSize: '0.78rem' }}>
-            {imapStatus.enabled ? 'WATCHING' : 'OFF'} · {imapStatus.last_message}
+      <details className="mail-manual">
+        <summary>Or check one email manually / upload .eml</summary>
+        <form className="form" onSubmit={handleSubmit}>
+          <label>
+            From
+            <input value={sender} onChange={(e) => setSender(e.target.value)} placeholder="sender@example.com" />
+          </label>
+          <label>
+            Subject
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" />
+          </label>
+          <label>
+            Email body
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Paste the full email text…"
+            />
+          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setSender(SAMPLE_PHISH.sender)
+                setSubject(SAMPLE_PHISH.subject)
+                setBody(SAMPLE_PHISH.body)
+              }}
+            >
+              Load sample phishing
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setSender(SAMPLE_SAFE.sender)
+                setSubject(SAMPLE_SAFE.subject)
+                setBody(SAMPLE_SAFE.body)
+              }}
+            >
+              Load sample safe mail
+            </button>
           </div>
-        ) : null}
-      </form>
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            <MailWarning size={16} />
+            {loading ? 'Checking…' : 'Check this email'}
+          </button>
+        </form>
+        <div className="mail-extra">
+          <label className="btn btn-secondary">
+            <Upload size={16} />
+            Upload .eml file
+            <input type="file" accept=".eml,.txt" hidden onChange={handleUpload} />
+          </label>
+        </div>
+      </details>
     </div>
   )
 }

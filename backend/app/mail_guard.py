@@ -1,14 +1,17 @@
-"""Laptop mail phishing guard — paste, .eml drop folder, optional IMAP inbox."""
+"""Laptop mail phishing guard — live IMAP inbox + paste/.eml fallback."""
 
 from __future__ import annotations
 
 import email
 import imaplib
 import json
+import os
+import re
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from email.header import decode_header, make_header
 from email.message import Message
 from pathlib import Path
 from typing import Any
@@ -49,26 +52,45 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def _decode_header(value: str | None) -> str:
+    if not value:
+        return ""
+    try:
+        return str(make_header(decode_header(value)))
+    except Exception:
+        return str(value)
+
+
+def _strip_html(text: str) -> str:
+    cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", text)
+    cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
 def message_to_text(msg: Message) -> tuple[str, str, str]:
-    sender = str(msg.get("From") or "")
-    subject = str(msg.get("Subject") or "")
+    sender = _decode_header(msg.get("From"))
+    subject = _decode_header(msg.get("Subject"))
     body_parts: list[str] = []
+    html_parts: list[str] = []
     if msg.is_multipart():
         for part in msg.walk():
             ctype = (part.get_content_type() or "").lower()
+            payload = part.get_payload(decode=True) or b""
+            text = payload.decode(errors="replace") if isinstance(payload, bytes) else str(payload)
             if ctype == "text/plain":
-                payload = part.get_payload(decode=True) or b""
-                body_parts.append(payload.decode(errors="replace"))
-            elif ctype == "text/html" and not body_parts:
-                payload = part.get_payload(decode=True) or b""
-                body_parts.append(payload.decode(errors="replace"))
+                body_parts.append(text)
+            elif ctype == "text/html":
+                html_parts.append(_strip_html(text))
     else:
         payload = msg.get_payload(decode=True)
-        if payload:
-            body_parts.append(payload.decode(errors="replace") if isinstance(payload, bytes) else str(payload))
+        text = payload.decode(errors="replace") if isinstance(payload, bytes) else str(msg.get_payload() or "")
+        ctype = (msg.get_content_type() or "").lower()
+        if ctype == "text/html":
+            html_parts.append(_strip_html(text))
         else:
-            body_parts.append(str(msg.get_payload() or ""))
-    return sender, subject, "\n".join(body_parts).strip()
+            body_parts.append(text)
+    body = "\n".join(body_parts).strip() or "\n".join(html_parts).strip()
+    return sender, subject, body
 
 
 def parse_eml_bytes(raw: bytes) -> tuple[str, str, str]:
@@ -112,7 +134,7 @@ def evaluate_mail(sender: str, subject: str, body: str) -> MailVerdict:
         phishing=phishing,
         threat_type=threat_type,
         severity="medium" if phishing else result.severity,
-        confidence=result.confidence,
+        confidence=max(result.confidence, 0.82 if phishing else result.confidence),
         indicators=list(result.indicators or []),
         verdict=verdict,
         sender=sender,
@@ -130,12 +152,16 @@ def store_verdict(db: Session, verdict: MailVerdict, origin: str) -> Any:
         protocol="SMTP",
         raw_payload=verdict.payload[:4000],
     )
+    event.threat_type = verdict.threat_type
+    event.severity = verdict.severity
+    event.confidence = verdict.confidence
     extra = ", ".join(
         [
             event.indicators or "",
             f"mail-origin:{origin}",
             f"from:{verdict.sender[:80]}" if verdict.sender else "",
             f"subject:{verdict.subject[:80]}" if verdict.subject else "",
+            verdict.verdict,
         ]
     )
     event.indicators = extra[:500]
@@ -200,6 +226,15 @@ def scan_drop_folder(db: Session) -> dict[str, Any]:
     }
 
 
+def _imap_fetch_bytes(raw: Any) -> bytes | None:
+    if not raw:
+        return None
+    for item in raw:
+        if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], (bytes, bytearray)):
+            return bytes(item[1])
+    return None
+
+
 class MailInboxMonitor:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -211,12 +246,14 @@ class MailInboxMonitor:
         self._username = ""
         self._password = ""
         self._mailbox = "INBOX"
-        self._interval = 45
+        self._interval = 20
         self._cycles = 0
-        self._last_message = "IMAP inbox watch is off"
+        self._last_message = "Inbox watch is off — connect Gmail/Outlook to detect new mail"
         self._last_error: str | None = None
         self._last_at: datetime | None = None
         self._last_events = 0
+        self._last_phishing = 0
+        self._total_phishing = 0
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -232,8 +269,23 @@ class MailInboxMonitor:
                 "last_error": self._last_error,
                 "last_at": self._last_at,
                 "last_events": self._last_events,
+                "last_phishing": self._last_phishing,
+                "total_phishing": self._total_phishing,
                 "drop_dir": str(DROP_DIR),
             }
+
+    def _test_login(self, host: str, username: str, password: str, mailbox: str) -> None:
+        client = imaplib.IMAP4_SSL(host)
+        try:
+            client.login(username, password)
+            typ, _ = client.select(mailbox, readonly=True)
+            if typ != "OK":
+                raise RuntimeError(f"Cannot open mailbox {mailbox}")
+        finally:
+            try:
+                client.logout()
+            except Exception:
+                pass
 
     def connect(
         self,
@@ -242,35 +294,58 @@ class MailInboxMonitor:
         username: str,
         password: str,
         mailbox: str = "INBOX",
-        interval_seconds: int = 45,
+        interval_seconds: int = 20,
+        persist: bool = True,
     ) -> dict[str, Any]:
+        host = host.strip()
+        username = username.strip()
+        password = (password or "").replace(" ", "")
+        mailbox = (mailbox or "INBOX").strip()
+        if not host or not username or not password:
+            raise RuntimeError("IMAP host, email, and app password are required")
+        self._test_login(host, username, password, mailbox)
+        if persist:
+            _write_json(
+                SETTINGS_PATH,
+                {
+                    "host": host,
+                    "username": username,
+                    "password": password,
+                    "mailbox": mailbox,
+                    "interval_seconds": int(interval_seconds),
+                },
+            )
+        self.stop()
         with self._lock:
-            self._host = host.strip()
-            self._username = username.strip()
+            self._host = host
+            self._username = username
             self._password = password
-            self._mailbox = mailbox.strip() or "INBOX"
-            self._interval = max(20, min(600, int(interval_seconds)))
+            self._mailbox = mailbox
+            self._interval = max(15, min(600, int(interval_seconds)))
             self._last_error = None
-            self._last_message = f"Connecting to {self._host} as {self._username}"
-            if self._running and self._thread and self._thread.is_alive():
-                return self.status()
+            self._last_message = f"Watching inbox {username} on {host}"
             self._stop.clear()
             self._running = True
             self._thread = threading.Thread(target=self._loop, name="mail-imap-watch", daemon=True)
             self._thread.start()
+        try:
+            return self.poll_once()
+        except Exception:
             return self.status()
 
-    def stop(self) -> dict[str, Any]:
+    def stop(self, *, forget: bool = False) -> dict[str, Any]:
         with self._lock:
             self._running = False
             self._stop.set()
             thread = self._thread
         if thread and thread.is_alive() and thread is not threading.current_thread():
             thread.join(timeout=2.0)
+        if forget and SETTINGS_PATH.exists():
+            SETTINGS_PATH.unlink()
         with self._lock:
             self._polling = False
             self._thread = None
-            self._last_message = "IMAP inbox watch stopped"
+            self._last_message = "Inbox watch stopped"
             return self.status()
 
     def poll_once(self) -> dict[str, Any]:
@@ -278,55 +353,73 @@ class MailInboxMonitor:
 
         with self._lock:
             host, user, password, mailbox = self._host, self._username, self._password, self._mailbox
+            first_cycle = self._cycles == 0
             self._polling = True
         if not host or not user or not password:
-            raise RuntimeError("IMAP is not connected")
+            raise RuntimeError("Inbox watch is not connected")
         db = SessionLocal()
         created = 0
+        phishing_hits = 0
         try:
             client = imaplib.IMAP4_SSL(host)
             client.login(user, password)
-            client.select(mailbox, readonly=True)
+            typ, _ = client.select(mailbox, readonly=True)
+            if typ != "OK":
+                raise RuntimeError(f"Cannot open mailbox {mailbox}")
             _typ, data = client.search(None, "UNSEEN")
-            ids = (data[0] or b"").split()
-            if not ids:
-                _typ, data = client.search(None, "ALL")
-                ids = (data[0] or b"").split()[-8:]
+            ids = list(data[0].split()) if data and data[0] else []
+            if first_cycle:
+                _typ, all_data = client.search(None, "ALL")
+                recent = list(all_data[0].split())[-10:] if all_data and all_data[0] else []
+                ids = ids + [item for item in recent if item not in ids]
             seen_ids: list[str] = _read_json(SEEN_PATH, [])
-            for msg_id in ids[-12:]:
+            for msg_id in ids[-15:]:
                 key = f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
                 if key in seen_ids:
                     continue
                 _typ, raw = client.fetch(msg_id, "(BODY.PEEK[])")
-                if not raw or not raw[0]:
+                blob = _imap_fetch_bytes(raw)
+                if not blob:
                     continue
-                blob = raw[0][1]
-                if not isinstance(blob, (bytes, bytearray)):
-                    continue
-                sender, subject, body = parse_eml_bytes(bytes(blob))
-                check_and_store(
+                sender, subject, body = parse_eml_bytes(blob)
+                stored = check_and_store(
                     db,
                     sender=sender,
                     subject=subject,
-                    body=body or subject,
+                    body=body or subject or "(empty message)",
                     origin=f"imap:{mailbox}",
                 )
+                if stored.get("phishing"):
+                    phishing_hits += 1
                 seen_ids.append(key)
                 created += 1
-            _write_json(SEEN_PATH, seen_ids[-500:])
+            _write_json(SEEN_PATH, seen_ids[-800:])
             client.logout()
-            message = f"IMAP {mailbox}: stored {created} new message(s) from {host}"
+            if phishing_hits:
+                message = (
+                    f"PHISHING DETECTED in {phishing_hits} new mail(s) for {user}. "
+                    f"Checked {created} new message(s) from {host}."
+                )
+            else:
+                message = f"Inbox {user}: {created} new message(s) checked, no phishing this cycle"
             with self._lock:
                 self._cycles += 1
                 self._last_events = created
+                self._last_phishing = phishing_hits
+                self._total_phishing += phishing_hits
                 self._last_message = message
                 self._last_error = None
                 self._last_at = datetime.now(timezone.utc)
-            return {"new_events": created, "message": message, **self.status()}
+            return {
+                "new_events": created,
+                "last_phishing": phishing_hits,
+                "message": message,
+                **self.status(),
+            }
         except Exception as exc:
             with self._lock:
                 self._last_error = str(exc)
-                self._last_message = f"IMAP poll failed: {exc}"
+                self._last_message = f"Inbox poll failed: {exc}"
                 self._last_at = datetime.now(timezone.utc)
             raise
         finally:
@@ -335,6 +428,11 @@ class MailInboxMonitor:
                 self._polling = False
 
     def _loop(self) -> None:
+        waited = 0.0
+        interval = float(self._interval)
+        while waited < interval and not self._stop.is_set():
+            time.sleep(min(1.0, interval - waited))
+            waited += 1.0
         while not self._stop.is_set():
             try:
                 self.poll_once()
@@ -348,3 +446,25 @@ class MailInboxMonitor:
 
 
 mail_monitor = MailInboxMonitor()
+
+
+def autostart_mail_watch() -> None:
+    """Resume inbox watch from env vars or last saved laptop settings."""
+    settings = _read_json(SETTINGS_PATH, {}) if SETTINGS_PATH.exists() else {}
+    host = os.getenv("MAIL_IMAP_HOST") or settings.get("host") or ""
+    username = os.getenv("MAIL_IMAP_USER") or settings.get("username") or ""
+    password = os.getenv("MAIL_IMAP_PASSWORD") or settings.get("password") or ""
+    mailbox = os.getenv("MAIL_IMAP_MAILBOX") or settings.get("mailbox") or "INBOX"
+    interval = int(os.getenv("MAIL_IMAP_INTERVAL") or settings.get("interval_seconds") or 20)
+    if host and username and password:
+        try:
+            mail_monitor.connect(
+                host=host,
+                username=username,
+                password=password,
+                mailbox=mailbox,
+                interval_seconds=interval,
+                persist=False,
+            )
+        except Exception:
+            pass

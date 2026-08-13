@@ -112,12 +112,17 @@ Dashboard (dev): **http://127.0.0.1:5173**
 
 ## Step 1 — phishing mail on THIS laptop
 
-The old Email Gateway card does **not** read Gmail/Outlook. Use the new **My Mail** tab.
+The app **does** watch your real inbox after you connect it.
 
-1. Start the app and open **My Mail**
-2. Click **Load sample phishing** then **Check this email** — you should see **PHISHING DETECTED**
-3. For a real mail: copy it from Gmail/Outlook and paste From / Subject / Body, or save as `.eml` and upload
-4. Optional: connect IMAP with a Gmail/Outlook **app password** so new inbox mail is checked automatically
+1. Open **My Mail**
+2. Choose Gmail or Outlook
+3. Enter your email and a Google/Microsoft **App Password** (not your normal password)
+4. Click **Start watching my inbox**
+5. New mail is pulled about every 20 seconds, classified, and a **PHISHING DETECTED** popup appears if it is a lure
+
+Gmail: enable IMAP, then create an App Password under Google Account → Security → 2-Step Verification → App passwords.
+
+The connection is saved on this laptop (`data/mail_settings.json`) and resumes when you start the app again.
 
 ## How multi-source collection works
 

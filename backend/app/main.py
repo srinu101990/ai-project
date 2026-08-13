@@ -22,7 +22,7 @@ from .collector import collect_from_network, ingest_event, projection_burst
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
 from .demo_feed import autostart_demo_feed, demo_feed
-from .mail_guard import check_and_store, mail_monitor, parse_eml_bytes, scan_drop_folder
+from .mail_guard import autostart_mail_watch, check_and_store, mail_monitor, parse_eml_bytes, scan_drop_folder
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
@@ -81,8 +81,8 @@ async def lifespan(_: FastAPI):
         db.close()
     # Start continuous LAN monitoring in the background.
     autostart_monitor()
-    # Optional demo feeder for presentation (off by default).
     autostart_demo_feed()
+    autostart_mail_watch()
     try:
         yield
     finally:
@@ -321,19 +321,25 @@ def mail_status():
 
 @app.post("/api/mail/imap/connect", response_model=MailImapStatus)
 def mail_imap_connect(payload: MailImapConnectRequest):
-    """Watch Gmail/Outlook IMAP on this laptop (use an app password, not your main password)."""
-    return mail_monitor.connect(
-        host=payload.host,
-        username=payload.username,
-        password=payload.password,
-        mailbox=payload.mailbox or "INBOX",
-        interval_seconds=payload.interval_seconds or 45,
-    )
+    """Connect to Gmail/Outlook and start watching new inbox mail."""
+    try:
+        return mail_monitor.connect(
+            host=payload.host,
+            username=payload.username,
+            password=payload.password,
+            mailbox=payload.mailbox or "INBOX",
+            interval_seconds=payload.interval_seconds or 20,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/mail/imap/poll", response_model=MailImapStatus)
 def mail_imap_poll():
-    return mail_monitor.poll_once()
+    try:
+        return mail_monitor.poll_once()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/mail/imap/stop", response_model=MailImapStatus)

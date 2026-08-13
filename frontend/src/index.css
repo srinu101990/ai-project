@@ -1683,6 +1683,40 @@ th {
   margin-top: 0.9rem;
 }
 
+.mail-steps {
+  margin: 0 0 0.85rem;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.mail-watch-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  margin-bottom: 0.85rem;
+  font-size: 0.88rem;
+}
+
+.mail-watch-banner.on {
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #bbf7d0;
+}
+
+.mail-manual {
+  margin-top: 1.1rem;
+}
+
+.mail-manual summary {
+  cursor: pointer;
+  color: var(--cyan);
+  margin-bottom: 0.7rem;
+}
+
 .report-list {
   margin: 0;
   padding-left: 1.1rem;
