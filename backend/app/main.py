@@ -14,18 +14,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .classifier import classifier
-from .collector import collect_from_network, ingest_event
+from .collector import collect_from_network, ingest_event, projection_burst
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
 from .demo_feed import autostart_demo_feed, demo_feed
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
+from .multi_source import source_hub
 from .network_scanner import resolve_scan_network
-from .report import build_report_summary, generate_pdf_report, get_stats
+from .remote_agents import agent_registry, ingest_agent_heartbeat
 from .schemas import (
+    AgentHeartbeatRequest,
+    AgentHeartbeatResponse,
     ClassifyRequest,
     ClassifyResponse,
     CollectRequest,
@@ -35,6 +39,9 @@ from .schemas import (
     IngestRequest,
     MonitorControlRequest,
     MonitorStatus,
+    MultiSourceStatus,
+    ProjectionBurstResponse,
+    RemoteAgentStatus,
     ReportSummary,
     StatsResponse,
     StatusUpdate,
@@ -80,8 +87,9 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="AI Cyber Threat Intelligence Dashboard",
     description=(
-        "Collects network cyber threat data, classifies phishing/malware/ransomware "
-        "with AI, visualizes real-time stats, and generates decision-support reports. "
+        "Collects cyber threat intelligence from multiple live sources at the same time "
+        "(Network IDS, Endpoint, Firewall, DNS, Email, Auth), classifies phishing/malware/"
+        "ransomware with AI, visualizes real-time stats, and generates decision-support reports. "
         "Runs fully offline after dependencies are installed."
     ),
     version="1.0.0",
@@ -125,6 +133,7 @@ def health():
         pass
     mon = monitor.status()
     demo = demo_feed.status()
+    hub = source_hub.status()
     return {
         "status": "ok",
         "service": "cyber-threat-intel",
@@ -136,6 +145,8 @@ def health():
         "monitor_last_message": mon.get("last_message"),
         "demo_feed_enabled": demo.get("enabled", False),
         "demo_feed_interval_seconds": demo.get("interval_seconds"),
+        "live_source_count": hub.get("live_source_count", 0),
+        "connected_agents": agent_registry.status().get("connected", 0),
         "offline_capable": True,
         "bind_host": BIND_HOST,
         "bind_port": BIND_PORT,
@@ -179,6 +190,79 @@ def demo_feed_start(payload: DemoFeedControlRequest = DemoFeedControlRequest()):
 @app.post("/api/demo-feed/stop", response_model=DemoFeedStatus)
 def demo_feed_stop():
     return demo_feed.stop()
+
+
+def _source_counts(db: Session) -> dict[str, int]:
+    rows = (
+        db.query(ThreatEvent.source, func.count(ThreatEvent.id))
+        .group_by(ThreatEvent.source)
+        .all()
+    )
+    return {name: int(count) for name, count in rows}
+
+
+@app.get("/api/sources", response_model=MultiSourceStatus)
+def list_live_sources(db: Session = Depends(get_db)):
+    """Status of the six collectors that run in parallel on every sweep."""
+    return source_hub.status(_source_counts(db))
+
+
+@app.post("/api/sources/sweep", response_model=CollectResponse)
+def sweep_live_sources(db: Session = Depends(get_db)):
+    """Run Network IDS, Endpoint, Firewall, DNS, Email, and Auth at the same time."""
+    return collect_from_network(db, batch_size=18, mode="network")
+
+
+@app.post("/api/sources/burst", response_model=ProjectionBurstResponse)
+def projection_multi_source_burst(db: Session = Depends(get_db)):
+    """Projector demo: live sweep plus one classified event from every source at once."""
+    return projection_burst(db)
+
+
+def _join_command() -> str:
+    local_ip = "127.0.0.1"
+    try:
+        local_ip, _network = resolve_scan_network()
+    except Exception:
+        pass
+    return f"python sentinel_agent.py --server http://{local_ip}:{BIND_PORT}"
+
+
+@app.get("/api/agents", response_model=RemoteAgentStatus)
+def list_remote_agents():
+    """PCs on the LAN that are running the remote agent."""
+    payload = agent_registry.status()
+    payload["join_command"] = _join_command()
+    payload["agent_download"] = "/agent/sentinel_agent.py"
+    return payload
+
+
+@app.post("/api/agents/heartbeat", response_model=AgentHeartbeatResponse)
+def remote_agent_heartbeat(
+    payload: AgentHeartbeatRequest, db: Session = Depends(get_db)
+):
+    """Receive hostname/IP/process/port findings from another PC."""
+    result = ingest_agent_heartbeat(
+        db,
+        hostname=payload.hostname,
+        source_ip=payload.source_ip,
+        os_name=payload.os_name or "unknown",
+        username=payload.username or "unknown",
+        findings=[item.model_dump() for item in payload.findings],
+    )
+    return result
+
+
+@app.get("/agent/sentinel_agent.py", include_in_schema=False)
+def download_remote_agent():
+    path = PROJECT_ROOT / "agent" / "sentinel_agent.py"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Agent script not found")
+    return FileResponse(
+        path,
+        media_type="text/x-python",
+        filename="sentinel_agent.py",
+    )
 
 
 @app.get("/api/threats", response_model=list[ThreatEventOut])
@@ -304,6 +388,7 @@ def _mount_frontend() -> None:
         blocked = (
             "api/",
             "static/",
+            "agent/",
             "docs",
             "openapi.json",
             "redoc",

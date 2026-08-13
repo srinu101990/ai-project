@@ -197,3 +197,40 @@ export default function ThreatCharts({ stats }) {
     </div>
   )
 }
+
+export function SourceChart({ stats }) {
+  const bySource = percentMap(
+    Object.entries(stats?.by_source || {}).map(([name, value]) => ({
+      name: name.replace('Demo Lab / ', ''),
+      value,
+    })),
+  )
+
+  return (
+    <div className="panel section chart-panel">
+      <div className="section-head">
+        <h3>Events by Source</h3>
+        <span>Simultaneous collectors</span>
+      </div>
+      <div className="chart-wrap severity-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={bySource} layout="vertical" margin={{ left: 8, right: 12 }}>
+            <CartesianGrid stroke="rgba(148,163,184,0.1)" horizontal={false} />
+            <XAxis type="number" stroke="#7b8db0" fontSize={11} allowDecimals={false} />
+            <YAxis
+              type="category"
+              dataKey="name"
+              stroke="#7b8db0"
+              fontSize={10}
+              width={128}
+              tickLine={false}
+              axisLine={false}
+            />
+            <Tooltip content={<ChartTooltip />} />
+            <Bar dataKey="value" name="Events" fill="#22d3ee" radius={[0, 8, 8, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
