@@ -155,7 +155,7 @@ const NETWORK_CATALOG = [
   },
 ]
 
-function ThreatCard({ id, title, color, Icon, description, index }) {
+function ThreatCard({ title, color, Icon, description, index }) {
   return (
     <article
       className="threat-def-card panel"

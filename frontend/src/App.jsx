@@ -27,6 +27,7 @@ import MailGuardPanel from './components/MailGuardPanel'
 import FileGuardPanel from './components/FileGuardPanel'
 import LaptopMalwarePanel from './components/LaptopMalwarePanel'
 import SetupChecklist from './components/SetupChecklist'
+import LiveSourcesPanel from './components/LiveSourcesPanel'
 import ConnectedPCs from './components/ConnectedPCs'
 
 function useClock() {
