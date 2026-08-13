@@ -142,7 +142,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -626,6 +626,38 @@ def report_pdf(db: Session = Depends(get_db)):
     )
 
 
+ASSET_MIME = {
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".woff2": "font/woff2",
+    ".json": "application/json",
+    ".map": "application/json",
+}
+
+
+class AssetStaticFiles(StaticFiles):
+    """Serve JS/CSS with MIME types Edge/Chrome accept on Windows."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        suffix = Path(str(path)).suffix.lower()
+        mime = ASSET_MIME.get(suffix)
+        if mime and getattr(response, "headers", None) is not None:
+            response.headers["content-type"] = mime
+            response.headers["access-control-allow-origin"] = "*"
+        return response
+
+
+def _file_response(path: Path) -> FileResponse:
+    mime = ASSET_MIME.get(path.suffix.lower())
+    headers = {"access-control-allow-origin": "*"}
+    if mime:
+        return FileResponse(path, media_type=mime, headers=headers)
+    return FileResponse(path, headers=headers)
+
+
 def _mount_frontend() -> None:
     """Serve the built React app from FastAPI for single-process offline use."""
     if not FRONTEND_DIST.exists():
@@ -633,27 +665,26 @@ def _mount_frontend() -> None:
 
     assets_dir = FRONTEND_DIST / "assets"
     if assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+        app.mount("/assets", AssetStaticFiles(directory=str(assets_dir)), name="assets")
 
     fonts_dir = FRONTEND_DIST / "fonts"
     if fonts_dir.exists():
-        app.mount("/fonts", StaticFiles(directory=str(fonts_dir)), name="fonts")
+        app.mount("/fonts", AssetStaticFiles(directory=str(fonts_dir)), name="fonts")
 
     @app.get("/favicon.svg", include_in_schema=False)
     def favicon():
         path = FRONTEND_DIST / "favicon.svg"
         if path.exists():
-            return FileResponse(path)
+            return _file_response(path)
         raise HTTPException(status_code=404, detail="favicon not found")
 
     @app.get("/", include_in_schema=False)
     def spa_index():
         index = FRONTEND_DIST / "index.html"
-        return FileResponse(index)
+        return FileResponse(index, media_type="text/html; charset=utf-8")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str):
-        # Never hijack API, docs, or static swagger routes.
         blocked = (
             "api/",
             "static/",
@@ -665,11 +696,14 @@ def _mount_frontend() -> None:
         if full_path.startswith(blocked) or full_path in {"docs", "openapi.json", "redoc"}:
             raise HTTPException(status_code=404, detail="Not found")
         candidate = FRONTEND_DIST / full_path
+        suffix = Path(full_path).suffix.lower()
         if candidate.is_file():
-            return FileResponse(candidate)
+            return _file_response(candidate)
+        if suffix in ASSET_MIME:
+            raise HTTPException(status_code=404, detail="Asset not found")
         index = FRONTEND_DIST / "index.html"
         if index.exists():
-            return FileResponse(index)
+            return FileResponse(index, media_type="text/html; charset=utf-8")
         return HTMLResponse(
             "<h1>Frontend build missing</h1><p>Run <code>npm run build</code> in frontend/.</p>",
             status_code=404,
