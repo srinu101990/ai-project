@@ -9,7 +9,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -22,6 +22,7 @@ from .collector import collect_from_network, ingest_event, projection_burst
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
 from .demo_feed import autostart_demo_feed, demo_feed
+from .mail_guard import check_and_store, mail_monitor, parse_eml_bytes, scan_drop_folder
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
@@ -37,6 +38,11 @@ from .schemas import (
     DemoFeedControlRequest,
     DemoFeedStatus,
     IngestRequest,
+    MailCheckRequest,
+    MailCheckResponse,
+    MailDropScanResponse,
+    MailImapConnectRequest,
+    MailImapStatus,
     MonitorControlRequest,
     MonitorStatus,
     MultiSourceStatus,
@@ -81,6 +87,7 @@ async def lifespan(_: FastAPI):
         yield
     finally:
         demo_feed.stop()
+        mail_monitor.stop()
         monitor.stop()
 
 
@@ -263,6 +270,75 @@ def download_remote_agent():
         media_type="text/x-python",
         filename="sentinel_agent.py",
     )
+
+
+@app.post("/api/mail/check", response_model=MailCheckResponse)
+def mail_check(payload: MailCheckRequest, db: Session = Depends(get_db)):
+    """Classify a pasted laptop email as phishing or safe."""
+    return check_and_store(
+        db,
+        sender=payload.sender or "",
+        subject=payload.subject or "",
+        body=payload.body,
+        origin="paste",
+    )
+
+
+@app.post("/api/mail/upload-eml", response_model=MailCheckResponse)
+async def mail_upload_eml(
+    file: UploadFile = File(...), db: Session = Depends(get_db)
+):
+    """Classify a saved .eml email from Outlook/Gmail."""
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    name = (file.filename or "message.eml").lower()
+    if name.endswith(".eml"):
+        sender, subject, body = parse_eml_bytes(raw)
+    else:
+        sender, subject, body = "", file.filename or "upload.txt", raw.decode(errors="replace")
+    if not body.strip():
+        body = subject or "empty email body"
+    return check_and_store(
+        db,
+        sender=sender,
+        subject=subject,
+        body=body,
+        origin=f"upload:{file.filename}",
+    )
+
+
+@app.post("/api/mail/scan-drop", response_model=MailDropScanResponse)
+def mail_scan_drop(db: Session = Depends(get_db)):
+    """Scan inbox_drop/ for new .eml or .txt emails saved from the mail app."""
+    return scan_drop_folder(db)
+
+
+@app.get("/api/mail/status", response_model=MailImapStatus)
+def mail_status():
+    return mail_monitor.status()
+
+
+@app.post("/api/mail/imap/connect", response_model=MailImapStatus)
+def mail_imap_connect(payload: MailImapConnectRequest):
+    """Watch Gmail/Outlook IMAP on this laptop (use an app password, not your main password)."""
+    return mail_monitor.connect(
+        host=payload.host,
+        username=payload.username,
+        password=payload.password,
+        mailbox=payload.mailbox or "INBOX",
+        interval_seconds=payload.interval_seconds or 45,
+    )
+
+
+@app.post("/api/mail/imap/poll", response_model=MailImapStatus)
+def mail_imap_poll():
+    return mail_monitor.poll_once()
+
+
+@app.post("/api/mail/imap/stop", response_model=MailImapStatus)
+def mail_imap_stop():
+    return mail_monitor.stop()
 
 
 @app.get("/api/threats", response_model=list[ThreatEventOut])

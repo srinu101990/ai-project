@@ -110,6 +110,15 @@ npm run dev
 
 Dashboard (dev): **http://127.0.0.1:5173**
 
+## Step 1 — phishing mail on THIS laptop
+
+The old Email Gateway card does **not** read Gmail/Outlook. Use the new **My Mail** tab.
+
+1. Start the app and open **My Mail**
+2. Click **Load sample phishing** then **Check this email** — you should see **PHISHING DETECTED**
+3. For a real mail: copy it from Gmail/Outlook and paste From / Subject / Body, or save as `.eml` and upload
+4. Optional: connect IMAP with a Gmail/Outlook **app password** so new inbox mail is checked automatically
+
 ## How multi-source collection works
 
 Every scan cycle runs **six collectors at the same time** on the presenter PC:

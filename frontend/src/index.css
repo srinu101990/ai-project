@@ -1655,6 +1655,34 @@ th {
   border: 1px solid rgba(34, 211, 238, 0.28);
 }
 
+.mail-verdict {
+  margin-top: 0.85rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+
+.mail-verdict.bad {
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+}
+
+.mail-verdict.ok {
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
+.mail-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
 .report-list {
   margin: 0;
   padding-left: 1.1rem;

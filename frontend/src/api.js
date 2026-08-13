@@ -84,6 +84,44 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
+  checkMail: (payload) =>
+    request('/mail/check', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  uploadMail: async (file) => {
+    const body = new FormData()
+    body.append('file', file)
+    const response = await fetch(`${BASE}/mail/upload-eml`, {
+      method: 'POST',
+      body,
+    })
+    if (!response.ok) {
+      throw new Error((await response.text()) || 'Upload failed')
+    }
+    return response.json()
+  },
+  scanMailDrop: () =>
+    request('/mail/scan-drop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  mailStatus: () => request('/mail/status'),
+  connectMailImap: (payload) =>
+    request('/mail/imap/connect', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  pollMailImap: () =>
+    request('/mail/imap/poll', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  stopMailImap: () =>
+    request('/mail/imap/stop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   updateStatus: (id, status) =>
     request(`/threats/${id}`, {
       method: 'PATCH',

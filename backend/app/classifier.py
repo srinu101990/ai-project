@@ -29,6 +29,16 @@ PHISHING_PATTERNS = [
     (r"update\s+(billing|payment)", "billing update lure"),
     (r"http[s]?://[^\s]*login", "login URL"),
     (r"credential\s+harvest", "credential harvest"),
+    (r"account\s+(has\s+been\s+)?(suspend|locked|limited)", "account lock lure"),
+    (r"confirm\s+(your\s+)?identit", "identity confirm lure"),
+    (r"unusual\s+(sign[- ]?in|activity)", "unusual activity lure"),
+    (r"you\s+have\s+\d+\s+hours", "countdown pressure"),
+    (r"failure\s+to\s+(verify|confirm|update)", "failure-to-act threat"),
+    (r"kindly\s+(update|verify|click)", "kindly-verify lure"),
+    (r"dear\s+(customer|user|account\s+holder)", "generic dear-customer"),
+    (r"shared\s+(a\s+)?document\s+with\s+you", "fake document share"),
+    (r"(dhl|fedex|ups|courier).{0,40}(delivery|parcel|held)", "delivery phishing"),
+    (r"bit\.ly|tinyurl\.com|t\.co/", "shortened link"),
 ]
 
 VIRUS_PATTERNS = [

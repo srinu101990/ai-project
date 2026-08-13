@@ -218,3 +218,55 @@ class AgentHeartbeatResponse(BaseModel):
     events_collected: int
     message: str
     events: list[ThreatEventOut]
+
+
+class MailCheckRequest(BaseModel):
+    sender: Optional[str] = ""
+    subject: Optional[str] = ""
+    body: str = Field(..., min_length=3)
+
+
+class MailCheckResponse(BaseModel):
+    phishing: bool
+    threat_type: str
+    severity: str
+    confidence: float
+    indicators: list[str]
+    verdict: str
+    sender: Optional[str] = ""
+    subject: Optional[str] = ""
+    event: Optional[ThreatEventOut] = None
+
+
+class MailDropScanResponse(BaseModel):
+    scanned: int = 0
+    new_events: int = 0
+    skipped: int = 0
+    drop_dir: str
+    message: str
+    last: Optional[MailCheckResponse] = None
+
+
+class MailImapConnectRequest(BaseModel):
+    host: str = Field(..., min_length=3)
+    username: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=3)
+    mailbox: Optional[str] = "INBOX"
+    interval_seconds: Optional[int] = Field(default=45, ge=20, le=600)
+
+
+class MailImapStatus(BaseModel):
+    enabled: bool
+    polling: bool = False
+    host: str = ""
+    username: str = ""
+    mailbox: str = "INBOX"
+    interval_seconds: int = 45
+    cycles_completed: int = 0
+    last_message: Optional[str] = None
+    last_error: Optional[str] = None
+    last_at: Optional[datetime] = None
+    last_events: int = 0
+    drop_dir: str
+    new_events: Optional[int] = None
+    message: Optional[str] = None

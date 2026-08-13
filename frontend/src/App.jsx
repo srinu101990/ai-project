@@ -23,7 +23,7 @@ import SystemMetaRow from './components/SystemMetaRow'
 import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
-import LiveSourcesPanel from './components/LiveSourcesPanel'
+import MailGuardPanel from './components/MailGuardPanel'
 import ConnectedPCs from './components/ConnectedPCs'
 
 function useClock() {
@@ -455,6 +455,16 @@ function App() {
             </div>
             <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
           </div>
+        </section>
+      ) : null}
+
+      {tab === 'mail' ? (
+        <section className="page-grid">
+          <MailGuardPanel
+            onToast={showToast}
+            onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+          />
+          <RemediationPanel threatType={classifiedType} />
         </section>
       ) : null}
 
