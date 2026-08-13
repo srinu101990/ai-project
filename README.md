@@ -55,7 +55,14 @@ Then open:
 - **Other devices on your LAN:** http://\<your-lan-ip\>:8000
 - **API docs:** http://127.0.0.1:8000/docs
 
-**Chrome “127.0.0.1 refused to connect”** means the server is not running. Double-click `start-offline.bat` and **leave that black window open**. Only then open the URL. The first run installs Python packages (needs internet once). If the window closes immediately, Python is missing: install 3.11/3.12 from python.org and tick **Add python.exe to PATH**.
+**Chrome “127.0.0.1 refused to connect”** means the server is not running yet.
+
+1. Extract the zip (do not run files from inside the zip).
+2. Open the inner folder that contains `start-offline.bat`.
+3. Double-click `start-offline.bat` and **leave that window open**.
+4. Wait until it prints `READY`. Chrome opens by itself after that.
+5. If the window closes or says Python was not found, install **Python 3.12** from https://www.python.org/downloads/ and tick **Add python.exe to PATH**. Then run the bat again.
+6. If it still fails, open `start-offline.log` in the same folder and read the error.
 
 Continuous monitoring starts automatically when the server boots. The dashboard
 refreshes on its own — you do **not** need to keep clicking scan. Use **Pause
