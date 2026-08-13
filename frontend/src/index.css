@@ -872,6 +872,106 @@ a {
   color: var(--cyan);
 }
 
+.live-sources-panel {
+  margin-bottom: 0.95rem;
+  min-height: auto !important;
+  height: auto !important;
+}
+
+.live-source-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.live-source-card {
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(5, 10, 24, 0.55);
+  min-height: 148px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.live-source-card.online {
+  border-color: rgba(34, 211, 238, 0.4);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.12);
+}
+
+.live-source-card.sweeping {
+  animation: sourcePulse 1.2s ease-in-out infinite;
+}
+
+.live-source-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.live-source-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.live-source-icon.on {
+  color: var(--cyan);
+  border-color: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.25);
+}
+
+.live-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.live-source-badge.on {
+  color: var(--ok);
+}
+
+.live-source-card h4 {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.live-source-channel {
+  font-size: 0.72rem;
+  min-height: 2em;
+}
+
+.live-source-meta {
+  margin-top: auto;
+  font-size: 0.68rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.12rem;
+}
+
+.sources-stack {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+}
+
+@keyframes sourcePulse {
+  0%,
+  100% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.12); }
+  50% { box-shadow: 0 0 22px rgba(34, 211, 238, 0.35); }
+}
+
 .severity-chart {
   height: 100%;
   min-height: 280px;
@@ -1698,6 +1798,10 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .live-source-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .kpi-row.five {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -1719,7 +1823,8 @@ th {
   .kpi-row.five,
   .layout-grid,
   .tools-grid,
-  .snapshot-grid {
+  .snapshot-grid,
+  .live-source-grid {
     grid-template-columns: 1fr 1fr;
   }
 

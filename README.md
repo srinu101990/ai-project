@@ -10,9 +10,9 @@ The UI follows a neon cyber-ops aesthetic: threat definition cards, KPI tiles, l
 
 | Requirement | Implementation |
 |---|---|
-| Data Collection | Live LAN host/port/connection scan + manual ingest API |
+| Data Collection | 6 live sources in parallel (Network IDS, Endpoint, Firewall, DNS, Email, Auth) + ingest API |
 | AI Classification | Hybrid ML (TF-IDF + Logistic Regression) + explainable rule indicators |
-| Real-time Visualization | Live dashboard with timeline, pie, and severity charts |
+| Real-time Visualization | Live dashboard with source cards, pie, and severity charts |
 | Reporting | Executive summary + downloadable PDF decision report |
 | Network access | Server binds to `0.0.0.0` so other devices on the LAN can open the dashboard |
 
@@ -110,6 +110,24 @@ npm run dev
 
 Dashboard (dev): **http://127.0.0.1:5173**
 
+## How multi-source collection works
+
+Every scan cycle runs **six collectors at the same time** on the presenter PC:
+
+1. **Network IDS Sensor** — LAN host and risky-port scan (SMB, RDP, Telnet, databases)
+2. **Endpoint Detection Agent** — local process / command-line inspection
+3. **Firewall Flow Logs** — live socket table (listeners and suspicious outbound sessions)
+4. **DNS Sinkhole** — DNS (port 53) sessions
+5. **Email Gateway** — SMTP/IMAP/POP listeners and mail sessions
+6. **Auth Gateway** — SSH/RDP/VNC login channels
+
+Findings are classified with the on-device AI model and stored with the **source name** plus the **PC IP / hostname**. Duplicate findings in a time window are skipped.
+
+For a **projected live demo**, open **Sources** (or the dashboard cards) and click:
+
+- **Sweep All Sources Now** — real parallel collection
+- **Projection Burst** — live sweep **plus** one classified event from every source at the same moment (so all six cards light up even on a quiet office LAN)
+
 ## How network threat detection works
 
 1. Auto-detects the local IPv4 address and `/24` subnet (or `SCAN_SUBNET`)
@@ -125,7 +143,10 @@ No root/pcap privileges are required. This is TCP connect scanning + host connec
 
 ## Main API endpoints
 
-- `POST /api/collect` — one-shot live network scan & classify
+- `POST /api/collect` — one-shot live multi-source scan & classify
+- `GET /api/sources` — live collector status (6 sources)
+- `POST /api/sources/sweep` — run all six collectors now
+- `POST /api/sources/burst` — projector demo: live sweep + one event per source
 - `GET /api/monitor` — continuous monitor status
 - `POST /api/monitor/start` — start continuous monitoring
 - `POST /api/monitor/stop` — pause continuous monitoring

@@ -12,7 +12,7 @@ import {
   Wifi,
 } from 'lucide-react'
 import { api } from './api'
-import { ClassificationChart, SeverityChart } from './components/ThreatCharts'
+import { ClassificationChart, SeverityChart, SourceChart } from './components/ThreatCharts'
 import ThreatTable from './components/ThreatTable'
 import ClassifyPanel from './components/ClassifyPanel'
 import IngestPanel from './components/IngestPanel'
@@ -23,6 +23,7 @@ import SystemMetaRow from './components/SystemMetaRow'
 import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
+import LiveSourcesPanel from './components/LiveSourcesPanel'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -48,6 +49,9 @@ function App() {
   const [monitorBusy, setMonitorBusy] = useState(false)
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
+  const [sourceStatus, setSourceStatus] = useState(null)
+  const [sweeping, setSweeping] = useState(false)
+  const [bursting, setBursting] = useState(false)
   const [classifiedType, setClassifiedType] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState([])
@@ -111,7 +115,7 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [statsData, threatData, reportData, healthData, monitorData, demoData] =
+      const [statsData, threatData, reportData, healthData, monitorData, demoData, sourceData] =
         await Promise.all([
           api.getStats(),
           api.getThreats({ limit: 40 }),
@@ -119,6 +123,7 @@ function App() {
           api.health().catch(() => null),
           api.monitorStatus().catch(() => null),
           api.demoFeedStatus().catch(() => null),
+          api.liveSources().catch(() => null),
         ])
       setStats(statsData)
       setThreats(threatData)
@@ -126,6 +131,7 @@ function App() {
       if (healthData) setHealth(healthData)
       if (monitorData) setMonitor(monitorData)
       if (demoData) setDemoFeed(demoData)
+      if (sourceData) setSourceStatus(sourceData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
     } catch (err) {
@@ -168,9 +174,12 @@ function App() {
   async function handleCollect() {
     setCollecting(true)
     try {
-      const result = await api.collect(12, 'network')
+      const result = await api.collect(18, 'network')
       const detail = [
         result.message || `Collected ${result.events_collected} events`,
+        result.live_sources?.length
+          ? `${result.live_sources.length} live sources`
+          : null,
         result.subnet ? `subnet ${result.subnet}` : null,
         typeof result.hosts_alive === 'number' ? `${result.hosts_alive} host(s)` : null,
       ]
@@ -182,6 +191,38 @@ function App() {
       showToast(err.message || 'Network scan failed')
     } finally {
       setCollecting(false)
+    }
+  }
+
+  async function handleSweepSources() {
+    setSweeping(true)
+    try {
+      const result = await api.sweepSources()
+      showToast(
+        result.message ||
+          `Swept ${result.live_sources?.length || 6} sources · ${result.events_collected} events`,
+      )
+      await refresh()
+    } catch (err) {
+      showToast(err.message || 'Multi-source sweep failed')
+    } finally {
+      setSweeping(false)
+    }
+  }
+
+  async function handleProjectionBurst() {
+    setBursting(true)
+    try {
+      const result = await api.projectionBurst()
+      showToast(
+        result.message ||
+          `Projection burst: ${result.burst_events} sources fired together`,
+      )
+      await refresh()
+    } catch (err) {
+      showToast(err.message || 'Projection burst failed')
+    } finally {
+      setBursting(false)
     }
   }
 
@@ -380,6 +421,14 @@ function App() {
               </div>
             </article>
           </section>
+
+          <LiveSourcesPanel
+            sourceStatus={sourceStatus}
+            onSweep={handleSweepSources}
+            onBurst={handleProjectionBurst}
+            sweeping={sweeping || collecting}
+            bursting={bursting}
+          />
         </>
       ) : null}
 
@@ -438,56 +487,73 @@ function App() {
 
       {tab === 'sources' ? (
         <section className="page-grid sources-page">
-          <div className="panel section">
-            <div className="section-head">
-              <h3>Network Collection</h3>
-              <span>Continuous LAN monitoring</span>
-            </div>
-            <p className="muted source-copy">
-              Live host/port/connection scanning runs in the background. Pause anytime, or force an
-              immediate scan of the current network.
-            </p>
-            <div className="action-bar compact">
-              <button
-                className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
-                onClick={handleToggleMonitor}
-                disabled={monitorBusy}
-              >
-                {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
-                {monitorBusy
-                  ? 'Updating…'
-                  : monitor?.enabled
-                    ? 'Pause Monitoring'
-                    : 'Resume Monitoring'}
-              </button>
-              <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
-                <Radar size={16} />
-                {collecting ? 'Scanning now…' : 'Scan Now'}
-              </button>
-              <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
-                <RefreshCw size={16} className={loading ? 'spin' : undefined} />
-                Refresh
-              </button>
-            </div>
-            <div className="source-status mono">
-              <div>
-                Status:{' '}
-                <strong>
-                  {monitor?.scanning
-                    ? 'Scanning…'
-                    : monitor?.enabled
-                      ? 'Monitoring'
-                      : 'Paused'}
-                </strong>
+          <div className="sources-stack">
+            <LiveSourcesPanel
+              sourceStatus={sourceStatus}
+              onSweep={handleSweepSources}
+              onBurst={handleProjectionBurst}
+              sweeping={sweeping || collecting}
+              bursting={bursting}
+            />
+            <div className="panel section">
+              <div className="section-head">
+                <h3>Network Collection</h3>
+                <span>Continuous LAN monitoring</span>
               </div>
-              <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
-              <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
-              <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
-              <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
-              <div>Last message: {monitor?.last_message || '—'}</div>
+              <p className="muted source-copy">
+                Live host/port/connection scanning runs in the background together with endpoint,
+                firewall, DNS, email, and auth sensors. Pause anytime, or force an immediate
+                multi-source sweep.
+              </p>
+              <div className="action-bar compact">
+                <button
+                  className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
+                  onClick={handleToggleMonitor}
+                  disabled={monitorBusy}
+                >
+                  {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                  {monitorBusy
+                    ? 'Updating…'
+                    : monitor?.enabled
+                      ? 'Pause Monitoring'
+                      : 'Resume Monitoring'}
+                </button>
+                <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
+                  <Radar size={16} />
+                  {collecting ? 'Scanning now…' : 'Scan Now'}
+                </button>
+                <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
+                  <RefreshCw size={16} className={loading ? 'spin' : undefined} />
+                  Refresh
+                </button>
+              </div>
+              <div className="source-status mono">
+                <div>
+                  Status:{' '}
+                  <strong>
+                    {monitor?.scanning || sourceStatus?.sweeping
+                      ? 'Scanning…'
+                      : monitor?.enabled
+                        ? 'Monitoring'
+                        : 'Paused'}
+                  </strong>
+                </div>
+                <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
+                <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
+                <div>
+                  Live sources: {sourceStatus?.live_source_count ?? 0}/
+                  {sourceStatus?.source_count ?? 6}
+                </div>
+                <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
+                <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
+                <div>Last message: {sourceStatus?.last_message || monitor?.last_message || '—'}</div>
+              </div>
             </div>
           </div>
-          <IngestPanel onIngested={refresh} onToast={showToast} />
+          <div className="sources-stack">
+            <SourceChart stats={stats || { by_source: {} }} />
+            <IngestPanel onIngested={refresh} onToast={showToast} />
+          </div>
         </section>
       ) : null}
 

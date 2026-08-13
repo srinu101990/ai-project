@@ -33,6 +33,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ batch_size: batchSize, mode }),
     }),
+  liveSources: () => request('/sources'),
+  sweepSources: () =>
+    request('/sources/sweep', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  projectionBurst: () =>
+    request('/sources/burst', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   monitorStatus: () => request('/monitor'),
   startMonitor: (intervalSeconds) =>
     request('/monitor/start', {

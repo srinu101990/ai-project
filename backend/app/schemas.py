@@ -64,6 +64,7 @@ class CollectResponse(BaseModel):
     local_ip: Optional[str] = None
     hosts_alive: Optional[int] = None
     open_ports: Optional[int] = None
+    live_sources: Optional[list[str]] = None
     events: list[ThreatEventOut]
 
 
@@ -134,3 +135,42 @@ class DemoFeedStatus(BaseModel):
 
 class DemoFeedControlRequest(BaseModel):
     interval_seconds: Optional[int] = Field(default=None, ge=10, le=600)
+
+
+class LiveSourceOut(BaseModel):
+    id: str
+    name: str
+    channel: str
+    description: str
+    online: bool
+    sweeping: bool = False
+    observed: int = 0
+    last_findings: int = 0
+    events_stored: int = 0
+    last_threat_type: Optional[str] = None
+    last_at: Optional[datetime] = None
+    message: Optional[str] = None
+
+
+class MultiSourceStatus(BaseModel):
+    live_source_count: int
+    source_count: int
+    cycles_completed: int
+    sweeping: bool = False
+    last_cycle_at: Optional[datetime] = None
+    last_message: Optional[str] = None
+    sources: list[LiveSourceOut]
+
+
+class ProjectionBurstResponse(BaseModel):
+    status: str
+    mode: str
+    subnet: Optional[str] = None
+    local_ip: Optional[str] = None
+    live_events: int = 0
+    burst_events: int = 0
+    events_collected: int = 0
+    sources_scanned: int = 0
+    live_sources: list[str] = []
+    message: str
+    events: list[ThreatEventOut]

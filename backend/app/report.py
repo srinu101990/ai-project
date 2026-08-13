@@ -226,7 +226,7 @@ def get_stats(db: Session) -> dict:
         db.query(ThreatEvent.source, func.count(ThreatEvent.id))
         .group_by(ThreatEvent.source)
         .order_by(func.count(ThreatEvent.id).desc())
-        .limit(8)
+        .limit(12)
         .all()
     )
 
