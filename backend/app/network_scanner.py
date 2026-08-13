@@ -163,6 +163,9 @@ def _neighbor_ips(network: ipaddress.IPv4Network) -> list[str]:
             seen.add(str(addr))
             found.append(str(addr))
     return found
+
+
+def _probe_host(host: str) -> tuple[str, list[int]]:
     open_ports: list[int] = []
     for port in DISCOVERY_PORTS:
         if _tcp_open(host, port):
