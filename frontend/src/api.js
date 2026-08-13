@@ -44,6 +44,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  remoteAgents: () => request('/agents'),
   monitorStatus: () => request('/monitor'),
   startMonitor: (intervalSeconds) =>
     request('/monitor/start', {

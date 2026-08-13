@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import concurrent.futures
 import ipaddress
+import re
 import socket
+import subprocess
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -124,7 +126,43 @@ def _tcp_open(host: str, port: int, timeout: float = SCAN_TIMEOUT) -> bool:
         return False
 
 
-def _probe_host(host: str) -> tuple[str, list[int]]:
+def _neighbor_ips(network: ipaddress.IPv4Network) -> list[str]:
+    """IPs already seen in the local ARP/neighbor table (other PCs on the LAN)."""
+    commands = (
+        ["ip", "-4", "neigh", "show"],
+        ["arp", "-a"],
+        ["arp", "-an"],
+    )
+    text = ""
+    for cmd in commands:
+        try:
+            completed = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        blob = (completed.stdout or "") + (completed.stderr or "")
+        if blob.strip():
+            text = blob
+            break
+
+    found: list[str] = []
+    seen: set[str] = set()
+    for match in re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", text):
+        try:
+            addr = ipaddress.ip_address(match)
+        except ValueError:
+            continue
+        if not isinstance(addr, ipaddress.IPv4Address):
+            continue
+        if addr in network and not addr.is_loopback and str(addr) not in seen:
+            seen.add(str(addr))
+            found.append(str(addr))
+    return found
     open_ports: list[int] = []
     for port in DISCOVERY_PORTS:
         if _tcp_open(host, port):
@@ -137,6 +175,11 @@ def discover_hosts(network: ipaddress.IPv4Network, local_ip: str) -> dict[str, l
     # Always include self; for tiny nets scan everything, else sample + gateway.
     hosts: list[str] = [local_ip]
     hosts_set = {local_ip}
+
+    for ip in _neighbor_ips(network):
+        if ip not in hosts_set:
+            hosts.append(ip)
+            hosts_set.add(ip)
 
     if network.num_addresses <= 256:
         candidates = [str(ip) for ip in network.hosts()]

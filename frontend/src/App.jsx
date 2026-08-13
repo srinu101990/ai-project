@@ -24,6 +24,7 @@ import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
 import LiveSourcesPanel from './components/LiveSourcesPanel'
+import ConnectedPCs from './components/ConnectedPCs'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -50,6 +51,7 @@ function App() {
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
   const [sourceStatus, setSourceStatus] = useState(null)
+  const [agentStatus, setAgentStatus] = useState(null)
   const [sweeping, setSweeping] = useState(false)
   const [bursting, setBursting] = useState(false)
   const [classifiedType, setClassifiedType] = useState(null)
@@ -115,8 +117,16 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [statsData, threatData, reportData, healthData, monitorData, demoData, sourceData] =
-        await Promise.all([
+      const [
+        statsData,
+        threatData,
+        reportData,
+        healthData,
+        monitorData,
+        demoData,
+        sourceData,
+        agentData,
+      ] = await Promise.all([
           api.getStats(),
           api.getThreats({ limit: 40 }),
           api.reportSummary(),
@@ -124,6 +134,7 @@ function App() {
           api.monitorStatus().catch(() => null),
           api.demoFeedStatus().catch(() => null),
           api.liveSources().catch(() => null),
+          api.remoteAgents().catch(() => null),
         ])
       setStats(statsData)
       setThreats(threatData)
@@ -132,6 +143,7 @@ function App() {
       if (monitorData) setMonitor(monitorData)
       if (demoData) setDemoFeed(demoData)
       if (sourceData) setSourceStatus(sourceData)
+      if (agentData) setAgentStatus(agentData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
     } catch (err) {
@@ -429,6 +441,7 @@ function App() {
             sweeping={sweeping || collecting}
             bursting={bursting}
           />
+          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
         </>
       ) : null}
 
@@ -495,6 +508,7 @@ function App() {
               sweeping={sweeping || collecting}
               bursting={bursting}
             />
+            <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
             <div className="panel section">
               <div className="section-head">
                 <h3>Network Collection</h3>

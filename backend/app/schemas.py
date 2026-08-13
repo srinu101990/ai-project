@@ -174,3 +174,47 @@ class ProjectionBurstResponse(BaseModel):
     live_sources: list[str] = []
     message: str
     events: list[ThreatEventOut]
+
+
+class AgentFindingIn(BaseModel):
+    protocol: Optional[str] = "AGENT"
+    raw_payload: str = Field(..., min_length=5)
+    indicators: Optional[list[str]] = None
+
+
+class AgentHeartbeatRequest(BaseModel):
+    hostname: str = Field(..., min_length=1, max_length=80)
+    source_ip: str = Field(..., min_length=3, max_length=64)
+    os_name: Optional[str] = "unknown"
+    username: Optional[str] = "unknown"
+    findings: list[AgentFindingIn] = Field(default_factory=list)
+
+
+class RemoteAgentOut(BaseModel):
+    hostname: str
+    source_ip: str
+    os_name: Optional[str] = None
+    username: Optional[str] = None
+    online: bool
+    reports: int = 0
+    last_events: int = 0
+    last_threat_type: Optional[str] = None
+    last_seen: Optional[datetime] = None
+    first_seen: Optional[datetime] = None
+
+
+class RemoteAgentStatus(BaseModel):
+    connected: int
+    total_seen: int
+    agents: list[RemoteAgentOut]
+    join_command: Optional[str] = None
+    agent_download: str = "/agent/sentinel_agent.py"
+
+
+class AgentHeartbeatResponse(BaseModel):
+    status: str
+    hostname: str
+    source_ip: str
+    events_collected: int
+    message: str
+    events: list[ThreatEventOut]

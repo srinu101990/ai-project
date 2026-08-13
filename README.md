@@ -128,6 +128,22 @@ For a **projected live demo**, open **Sources** (or the dashboard cards) and cli
 - **Sweep All Sources Now** — real parallel collection
 - **Projection Burst** — live sweep **plus** one classified event from every source at the same moment (so all six cards light up even on a quiet office LAN)
 
+## Collect data from other PCs
+
+The dashboard PC cannot read processes inside another computer just by sitting on WiFi or a cable. To collect **from other PCs**, run the remote agent on each machine you are allowed to monitor.
+
+1. On the dashboard PC, start the app and note the LAN IP (also shown in **Connected PCs**)
+2. Copy `agent/sentinel_agent.py` to the other PC (or download it from the dashboard)
+3. On that PC run:
+
+```bash
+python sentinel_agent.py --server http://<dashboard-lan-ip>:8000
+```
+
+That PC appears under **Connected PCs** with its **hostname and IP**. It reports local processes and listening ports; the dashboard classifies them with the AI model.
+
+Network IDS still probes other LAN IPs for **open ports** without an agent (ARP neighbors + TCP connect). That is exposure only, not an inside view of the remote PC.
+
 ## How network threat detection works
 
 1. Auto-detects the local IPv4 address and `/24` subnet (or `SCAN_SUBNET`)
@@ -151,6 +167,9 @@ No root/pcap privileges are required. This is TCP connect scanning + host connec
 - `POST /api/monitor/start` — start continuous monitoring
 - `POST /api/monitor/stop` — pause continuous monitoring
 - `POST /api/ingest` — ingest a single network event from an agent/sensor
+- `GET /api/agents` — remote PCs running the agent
+- `POST /api/agents/heartbeat` — agent report from another PC
+- `GET /agent/sentinel_agent.py` — download the remote PC agent
 - `POST /api/classify` — classify arbitrary threat text
 - `GET /api/threats` — list threat events
 - `GET /api/stats` — real-time statistics for charts

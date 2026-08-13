@@ -26,8 +26,10 @@ from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
 from .network_scanner import resolve_scan_network
-from .report import build_report_summary, generate_pdf_report, get_stats
+from .remote_agents import agent_registry, ingest_agent_heartbeat
 from .schemas import (
+    AgentHeartbeatRequest,
+    AgentHeartbeatResponse,
     ClassifyRequest,
     ClassifyResponse,
     CollectRequest,
@@ -39,6 +41,7 @@ from .schemas import (
     MonitorStatus,
     MultiSourceStatus,
     ProjectionBurstResponse,
+    RemoteAgentStatus,
     ReportSummary,
     StatsResponse,
     StatusUpdate,
@@ -143,6 +146,7 @@ def health():
         "demo_feed_enabled": demo.get("enabled", False),
         "demo_feed_interval_seconds": demo.get("interval_seconds"),
         "live_source_count": hub.get("live_source_count", 0),
+        "connected_agents": agent_registry.status().get("connected", 0),
         "offline_capable": True,
         "bind_host": BIND_HOST,
         "bind_port": BIND_PORT,
@@ -213,6 +217,52 @@ def sweep_live_sources(db: Session = Depends(get_db)):
 def projection_multi_source_burst(db: Session = Depends(get_db)):
     """Projector demo: live sweep plus one classified event from every source at once."""
     return projection_burst(db)
+
+
+def _join_command() -> str:
+    local_ip = "127.0.0.1"
+    try:
+        local_ip, _network = resolve_scan_network()
+    except Exception:
+        pass
+    return f"python sentinel_agent.py --server http://{local_ip}:{BIND_PORT}"
+
+
+@app.get("/api/agents", response_model=RemoteAgentStatus)
+def list_remote_agents():
+    """PCs on the LAN that are running the remote agent."""
+    payload = agent_registry.status()
+    payload["join_command"] = _join_command()
+    payload["agent_download"] = "/agent/sentinel_agent.py"
+    return payload
+
+
+@app.post("/api/agents/heartbeat", response_model=AgentHeartbeatResponse)
+def remote_agent_heartbeat(
+    payload: AgentHeartbeatRequest, db: Session = Depends(get_db)
+):
+    """Receive hostname/IP/process/port findings from another PC."""
+    result = ingest_agent_heartbeat(
+        db,
+        hostname=payload.hostname,
+        source_ip=payload.source_ip,
+        os_name=payload.os_name or "unknown",
+        username=payload.username or "unknown",
+        findings=[item.model_dump() for item in payload.findings],
+    )
+    return result
+
+
+@app.get("/agent/sentinel_agent.py", include_in_schema=False)
+def download_remote_agent():
+    path = PROJECT_ROOT / "agent" / "sentinel_agent.py"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Agent script not found")
+    return FileResponse(
+        path,
+        media_type="text/x-python",
+        filename="sentinel_agent.py",
+    )
 
 
 @app.get("/api/threats", response_model=list[ThreatEventOut])
@@ -338,6 +388,7 @@ def _mount_frontend() -> None:
         blocked = (
             "api/",
             "static/",
+            "agent/",
             "docs",
             "openapi.json",
             "redoc",
