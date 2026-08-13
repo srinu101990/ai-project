@@ -272,3 +272,65 @@ class MailImapStatus(BaseModel):
     drop_dir: str
     new_events: Optional[int] = None
     message: Optional[str] = None
+
+
+class FileCheckResponse(BaseModel):
+    malicious: bool
+    threat_type: str
+    severity: str
+    confidence: float
+    indicators: list[str]
+    verdict: str
+    path: str
+    filename: str
+    event: Optional[ThreatEventOut] = None
+
+
+class FileWatchStatus(BaseModel):
+    enabled: bool
+    scanning: bool = False
+    interval_seconds: int = 8
+    cycles_completed: int = 0
+    folders: list[str] = []
+    last_message: Optional[str] = None
+    last_error: Optional[str] = None
+    last_at: Optional[datetime] = None
+    last_events: int = 0
+    last_malicious: int = 0
+    total_malicious: int = 0
+    drop_dir: str
+    new_events: Optional[int] = None
+    message: Optional[str] = None
+
+
+class FileScanResponse(BaseModel):
+    scanned: int = 0
+    new_events: int = 0
+    skipped: int = 0
+    folders: list[str] = []
+    drop_dir: str
+    message: str
+    last: Optional[FileCheckResponse] = None
+
+
+class FileTestSampleResponse(BaseModel):
+    created: list[str]
+    new_events: int = 0
+    message: str
+    last: Optional[FileCheckResponse] = None
+
+
+class SetupStepOut(BaseModel):
+    id: str
+    title: str
+    done: bool
+    optional: bool = False
+    detail: str = ""
+    tab: Optional[str] = None
+
+
+class SetupStatus(BaseModel):
+    ready: bool
+    completed: int
+    required: int
+    steps: list[SetupStepOut]

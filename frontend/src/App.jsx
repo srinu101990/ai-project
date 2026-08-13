@@ -24,6 +24,8 @@ import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
 import MailGuardPanel from './components/MailGuardPanel'
+import FileGuardPanel from './components/FileGuardPanel'
+import SetupChecklist from './components/SetupChecklist'
 import ConnectedPCs from './components/ConnectedPCs'
 
 function useClock() {
@@ -53,6 +55,8 @@ function App() {
   const [sourceStatus, setSourceStatus] = useState(null)
   const [agentStatus, setAgentStatus] = useState(null)
   const [mailStatus, setMailStatus] = useState(null)
+  const [fileStatus, setFileStatus] = useState(null)
+  const [setupStatus, setSetupStatus] = useState(null)
   const [sweeping, setSweeping] = useState(false)
   const [bursting, setBursting] = useState(false)
   const [classifiedType, setClassifiedType] = useState(null)
@@ -128,6 +132,8 @@ function App() {
         sourceData,
         agentData,
         mailData,
+        fileData,
+        setupData,
       ] = await Promise.all([
           api.getStats(),
           api.getThreats({ limit: 40 }),
@@ -138,6 +144,8 @@ function App() {
           api.liveSources().catch(() => null),
           api.remoteAgents().catch(() => null),
           api.mailStatus().catch(() => null),
+          api.fileStatus().catch(() => null),
+          api.setupStatus().catch(() => null),
         ])
       setStats(statsData)
       setThreats(threatData)
@@ -148,6 +156,8 @@ function App() {
       if (sourceData) setSourceStatus(sourceData)
       if (agentData) setAgentStatus(agentData)
       if (mailData) setMailStatus(mailData)
+      if (fileData) setFileStatus(fileData)
+      if (setupData) setSetupStatus(setupData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
     } catch (err) {
@@ -384,6 +394,7 @@ function App() {
 
       {tab === 'dashboard' ? (
         <>
+          <SetupChecklist setup={setupStatus} onGo={setTab} />
           <section className="dashboard-top">
             <LogAnalyzer threat={latestThreat} />
             <ClassificationChart stats={stats || { by_type: {} }} />
@@ -468,6 +479,17 @@ function App() {
             onToast={showToast}
             onChecked={(data) => setClassifiedType(data?.threat_type || null)}
             mailStatus={mailStatus}
+          />
+          <RemediationPanel threatType={classifiedType} />
+        </section>
+      ) : null}
+
+      {tab === 'files' ? (
+        <section className="page-grid">
+          <FileGuardPanel
+            onToast={showToast}
+            onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+            fileStatus={fileStatus}
           />
           <RemediationPanel threatType={classifiedType} />
         </section>

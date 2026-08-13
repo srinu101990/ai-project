@@ -75,7 +75,10 @@ RANSOMWARE_PATTERNS = [
     (r"pay\s+(in\s+)?crypto", "crypto payment demand"),
     (r"lockbit", "LockBit family"),
     (r"shadow\s+copies\s+deleted", "shadow copies deleted"),
-    (r"readme_for_decrypt", "decrypt readme note"),
+    (r"readme_for_decrypt|readme.*decrypt", "decrypt readme note"),
+    (r"your\s+files\s+are\s+encrypted", "files are encrypted notice"),
+    (r"how\s+to\s+decrypt", "how-to-decrypt note"),
+    (r"\.(wncry|lockbit|locked)\b", "ransomware file extension"),
 ]
 
 SPYWARE_PATTERNS = [
@@ -169,6 +172,8 @@ GENERIC_MALWARE_PATTERNS = [
     (r"registry\s+persistence", "registry persistence"),
     (r"dll\s+injection", "DLL injection"),
     (r"\bmalware\b", "malware keyword"),
+    (r"double\s+extension\s+dropper", "double extension dropper"),
+    (r"lure\s+filename\s+on\s+dangerous", "lure attachment filename"),
 ]
 
 DDOS_PATTERNS = [

@@ -4,6 +4,8 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'threats', label: 'Threat Intelligence' },
   { id: 'mail', label: 'My Mail' },
+  { id: 'files', label: 'My Files' },
+  { id: 'analyzer', label: 'AI Analyzer' },
   { id: 'reports', label: 'Reports' },
   { id: 'sources', label: 'Sources' },
 ]

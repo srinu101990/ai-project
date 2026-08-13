@@ -22,6 +22,14 @@ from .collector import collect_from_network, ingest_event, projection_burst
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
 from .demo_feed import autostart_demo_feed, demo_feed
+from .file_guard import (
+    autostart_file_watch,
+    check_and_store as check_file_and_store,
+    create_test_samples,
+    file_monitor,
+    mark_seen,
+    scan_folders,
+)
 from .mail_guard import autostart_mail_watch, check_and_store, mail_monitor, parse_eml_bytes, scan_drop_folder
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
@@ -37,6 +45,10 @@ from .schemas import (
     CollectResponse,
     DemoFeedControlRequest,
     DemoFeedStatus,
+    FileCheckResponse,
+    FileScanResponse,
+    FileTestSampleResponse,
+    FileWatchStatus,
     IngestRequest,
     MailCheckRequest,
     MailCheckResponse,
@@ -49,6 +61,8 @@ from .schemas import (
     ProjectionBurstResponse,
     RemoteAgentStatus,
     ReportSummary,
+    SetupStatus,
+    SetupStepOut,
     StatsResponse,
     StatusUpdate,
     ThreatEventOut,
@@ -83,11 +97,13 @@ async def lifespan(_: FastAPI):
     autostart_monitor()
     autostart_demo_feed()
     autostart_mail_watch()
+    autostart_file_watch()
     try:
         yield
     finally:
         demo_feed.stop()
         mail_monitor.stop()
+        file_monitor.stop()
         monitor.stop()
 
 
@@ -95,9 +111,9 @@ app = FastAPI(
     title="AI Cyber Threat Intelligence Dashboard",
     description=(
         "Collects cyber threat intelligence from multiple live sources at the same time "
-        "(Network IDS, Endpoint, Firewall, DNS, Email, Auth), classifies phishing/malware/"
-        "ransomware with AI, visualizes real-time stats, and generates decision-support reports. "
-        "Runs fully offline after dependencies are installed."
+        "(Network IDS, Endpoint, Firewall, DNS, Email, Auth), watches this laptop inbox and "
+        "folders, classifies phishing/malware/ransomware with AI, visualizes real-time stats, "
+        "and generates decision-support reports. Runs fully offline after dependencies are installed."
     ),
     version="1.0.0",
     lifespan=lifespan,
@@ -345,6 +361,134 @@ def mail_imap_poll():
 @app.post("/api/mail/imap/stop", response_model=MailImapStatus)
 def mail_imap_stop():
     return mail_monitor.stop()
+
+
+@app.get("/api/files/status", response_model=FileWatchStatus)
+def files_status():
+    return file_monitor.status()
+
+
+@app.post("/api/files/start", response_model=FileWatchStatus)
+def files_start():
+    """Start watching Downloads, Desktop, Documents, and file_drop/."""
+    return file_monitor.start(interval_seconds=8, persist=True)
+
+
+@app.post("/api/files/scan", response_model=FileWatchStatus)
+def files_scan():
+    try:
+        return file_monitor.scan_once()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/files/stop", response_model=FileWatchStatus)
+def files_stop():
+    return file_monitor.stop(forget=True)
+
+
+@app.post("/api/files/upload", response_model=FileCheckResponse)
+async def files_upload(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Classify a file dropped onto the dashboard (saved into file_drop/)."""
+    from .file_guard import DROP_DIR
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    name = Path(file.filename or "upload.bin").name
+    dest = DROP_DIR / name
+    dest.write_bytes(raw)
+    return check_file_and_store(db, dest, origin=f"upload:{name}")
+
+
+@app.post("/api/files/scan-drop", response_model=FileScanResponse)
+def files_scan_drop(db: Session = Depends(get_db)):
+    from .file_guard import default_watch_folders
+
+    return scan_folders(db, default_watch_folders())
+
+
+@app.post("/api/files/test-sample", response_model=FileTestSampleResponse)
+def files_test_sample(db: Session = Depends(get_db)):
+    """Write harmless ransomware/malware test files, then classify them."""
+    created = create_test_samples()
+    last = None
+    for path in created:
+        last = check_file_and_store(db, Path(path), origin="test-sample")
+    mark_seen(created)
+    if not file_monitor.status().get("enabled"):
+        file_monitor.start(interval_seconds=8, persist=True)
+    return {
+        "created": created,
+        "new_events": len(created),
+        "message": (
+            f"Wrote {len(created)} test file(s) and classified them. "
+            "Delete the CYBER_SENTINEL_TEST_* and invoice_payment_overdue_*.pdf.exe files after your demo."
+        ),
+        "last": last,
+    }
+
+
+@app.get("/api/setup", response_model=SetupStatus)
+def setup_status():
+    """First-run checklist for the laptop demo."""
+    mail = mail_monitor.status()
+    files = file_monitor.status()
+    agents = agent_registry.status()
+    steps = [
+        SetupStepOut(
+            id="app",
+            title="Dashboard is running on this laptop",
+            done=True,
+            detail="Open http://127.0.0.1:8000",
+            tab="dashboard",
+        ),
+        SetupStepOut(
+            id="files",
+            title="Watch Downloads / Desktop / Documents",
+            done=bool(files.get("enabled")),
+            detail=files.get("last_message") or "Starts automatically with the app",
+            tab="files",
+        ),
+        SetupStepOut(
+            id="mail",
+            title="Connect Gmail or Outlook inbox",
+            done=bool(mail.get("enabled")),
+            detail=(
+                f"Watching {mail.get('username')}"
+                if mail.get("enabled")
+                else "Open My Mail and start inbox watch with an app password"
+            ),
+            tab="mail",
+        ),
+        SetupStepOut(
+            id="network",
+            title="LAN multi-source monitoring",
+            done=bool(monitor.status().get("enabled")),
+            detail="Network IDS, endpoint, firewall, DNS, email, and auth sensors",
+            tab="sources",
+        ),
+        SetupStepOut(
+            id="agents",
+            title="Other PCs (optional)",
+            done=int(agents.get("connected") or 0) > 0,
+            optional=True,
+            detail=(
+                f"{agents.get('connected', 0)} PC(s) connected"
+                if agents.get("connected")
+                else "Run sentinel_agent.py on another PC if you want inside-host data"
+            ),
+            tab="sources",
+        ),
+    ]
+    required = [step for step in steps if not step.optional]
+    completed = sum(1 for step in required if step.done)
+    return SetupStatus(
+        ready=completed == len(required),
+        completed=completed,
+        required=len(required),
+        steps=steps,
+    )
 
 
 @app.get("/api/threats", response_model=list[ThreatEventOut])

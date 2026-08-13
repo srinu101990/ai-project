@@ -122,6 +122,40 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  fileStatus: () => request('/files/status'),
+  startFileWatch: () =>
+    request('/files/start', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  scanFiles: () =>
+    request('/files/scan', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  stopFileWatch: () =>
+    request('/files/stop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  testFileSample: () =>
+    request('/files/test-sample', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  uploadFile: async (file) => {
+    const body = new FormData()
+    body.append('file', file)
+    const response = await fetch(`${BASE}/files/upload`, {
+      method: 'POST',
+      body,
+    })
+    if (!response.ok) {
+      throw new Error((await response.text()) || 'Upload failed')
+    }
+    return response.json()
+  },
+  setupStatus: () => request('/setup'),
   updateStatus: (id, status) =>
     request(`/threats/${id}`, {
       method: 'PATCH',

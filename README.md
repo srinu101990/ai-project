@@ -11,6 +11,8 @@ The UI follows a neon cyber-ops aesthetic: threat definition cards, KPI tiles, l
 | Requirement | Implementation |
 |---|---|
 | Data Collection | 6 live sources in parallel (Network IDS, Endpoint, Firewall, DNS, Email, Auth) + ingest API |
+| Laptop mail | Watches Gmail/Outlook inbox (IMAP) and classifies phishing |
+| Laptop files | Watches Downloads/Desktop/Documents for malware and ransomware |
 | AI Classification | Hybrid ML (TF-IDF + Logistic Regression) + explainable rule indicators |
 | Real-time Visualization | Live dashboard with source cards, pie, and severity charts |
 | Reporting | Executive summary + downloadable PDF decision report |
@@ -22,6 +24,9 @@ The UI follows a neon cyber-ops aesthetic: threat definition cards, KPI tiles, l
 backend/          FastAPI API, AI classifier, live network scanner, PDF reports
 frontend/         React (Vite) dashboard UI + local fonts
 frontend/dist/    Prebuilt UI (served by FastAPI)
+agent/            Remote PC agent (optional, other machines)
+inbox_drop/       Optional folder for saved .eml files
+file_drop/        Optional folder for malware/ransomware test files
 start-offline.sh  One-command launcher (Linux/macOS)
 start-offline.bat One-command launcher (Windows)
 data/             SQLite DB + generated PDF reports (created at runtime)
@@ -67,6 +72,8 @@ for an immediate extra pass.
 | `MONITOR_AUTO_START` | `true` | Begin continuous LAN monitoring on startup |
 | `MONITOR_INTERVAL_SECONDS` | `45` | Seconds between automatic scans |
 | `MONITOR_BATCH_SIZE` | `12` | Max findings stored per monitor cycle |
+| `FILE_WATCH_AUTO_START` | `true` | Watch Downloads/Desktop/Documents on startup |
+| `FILE_WATCH_INTERVAL` | `8` | Seconds between folder scans |
 
 Example (simulated demo only, localhost bind):
 
@@ -110,19 +117,41 @@ npm run dev
 
 Dashboard (dev): **http://127.0.0.1:5173**
 
-## Step 1 — phishing mail on THIS laptop
+## Download once and test
 
-The app **does** watch your real inbox after you connect it.
+Use the **laptop phishing mail** copy of this project (the branch with My Mail + My Files), not the older zip.
+
+1. Unzip, then run `start-offline.bat` (Windows) or `./start-offline.sh`
+2. Open **http://127.0.0.1:8000**
+3. On the dashboard, follow **Download-and-test checklist**
+
+### Mail (phishing)
 
 1. Open **My Mail**
 2. Choose Gmail or Outlook
 3. Enter your email and a Google/Microsoft **App Password** (not your normal password)
 4. Click **Start watching my inbox**
-5. New mail is pulled about every 20 seconds, classified, and a **PHISHING DETECTED** popup appears if it is a lure
+5. Optional: **Load sample phishing** then **Check this email** to see a popup without waiting for real mail
+6. For a live test, send yourself a phishing-style message; it is pulled about every 20 seconds
 
 Gmail: enable IMAP, then create an App Password under Google Account → Security → 2-Step Verification → App passwords.
 
 The connection is saved on this laptop (`data/mail_settings.json`) and resumes when you start the app again.
+
+### Files (malware / ransomware)
+
+Folder watch starts with the app.
+
+1. Open **My Files**
+2. Click **Drop test samples** — harmless labeled files are written to `file_drop/` (and Downloads if that folder exists)
+3. Confirm popups for **RANSOMWARE DETECTED** / **MALWARE DETECTED**
+4. Or copy a suspicious file into Downloads yourself (for example `invoice.pdf.exe`)
+5. Delete the `CYBER_SENTINEL_TEST_*` files after the demo
+
+### Network and other PCs
+
+- **Sources → Sweep All Sources Now** or **Projection Burst** for the six live collectors
+- Other PCs: copy `agent/sentinel_agent.py` and run `python sentinel_agent.py --server http://<dashboard-lan-ip>:8000`
 
 ## How multi-source collection works
 
@@ -185,6 +214,12 @@ No root/pcap privileges are required. This is TCP connect scanning + host connec
 - `POST /api/agents/heartbeat` — agent report from another PC
 - `GET /agent/sentinel_agent.py` — download the remote PC agent
 - `POST /api/classify` — classify arbitrary threat text
+- `GET /api/setup` — download-and-test checklist status
+- `POST /api/mail/imap/connect` — start watching a Gmail/Outlook inbox
+- `GET /api/mail/status` — inbox watch status
+- `POST /api/files/start` — start watching laptop folders
+- `POST /api/files/test-sample` — write harmless malware/ransomware test files
+- `GET /api/files/status` — folder watch status
 - `GET /api/threats` — list threat events
 - `GET /api/stats` — real-time statistics for charts
 - `GET /api/health` — mode, local IP, scan subnet, monitor state
