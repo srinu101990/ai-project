@@ -272,6 +272,8 @@ class MailImapStatus(BaseModel):
     drop_dir: str
     new_events: Optional[int] = None
     message: Optional[str] = None
+    channel: str = "off"
+    outlook_installed: bool = False
 
 
 class FileCheckResponse(BaseModel):

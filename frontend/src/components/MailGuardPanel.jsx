@@ -136,80 +136,125 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
     }
   }
 
+  async function handleOutlookStart() {
+    setImapBusy(true)
+    try {
+      const status = await api.startOutlookWatch()
+      setImapStatus(status)
+      if (status.last_phishing) {
+        onToast?.(`PHISHING DETECTED in ${status.last_phishing} Outlook mail(s)`)
+      } else {
+        onToast?.(status.message || status.last_message || 'Outlook inbox watch started')
+      }
+    } catch (err) {
+      onToast?.(
+        err.message ||
+          'Could not read Outlook. Open classic Outlook, sign in, then click Allow if Windows asks.',
+      )
+    } finally {
+      setImapBusy(false)
+    }
+  }
+
   const phishing = result?.phishing || result?.threat_type === 'phishing'
   const watching = Boolean(imapStatus?.enabled)
+  const outlookMode = imapStatus?.channel === 'outlook'
+  const outlookInstalled = Boolean(imapStatus?.outlook_installed)
 
   return (
     <div className="panel section mail-guard-panel">
       <div className="section-head">
         <h3>Watch my email inbox</h3>
-        <span>{watching ? 'LIVE — new mail is being checked' : 'Connect Gmail or Outlook'}</span>
+        <span>
+          {watching
+            ? outlookMode
+              ? 'LIVE — Outlook on this laptop'
+              : 'LIVE — IMAP inbox'
+            : 'Not watching yet'}
+        </span>
       </div>
       <p className="muted source-copy">
-        When a new mail arrives, this laptop pulls it from your inbox, classifies it, and pops an
-        alert if it is phishing. Gmail/Outlook will not allow your normal password — use an app
-        password.
+        Chrome or Edge being signed into Gmail cannot be scanned. Google does not allow any app to
+        reuse that browser login. If <strong>classic Outlook</strong> is installed and already signed
+        in on this laptop, use the button below — no password. Otherwise use a Gmail App Password.
       </p>
-      <ol className="mail-steps">
-        <li>Gmail: turn on IMAP in Settings → See all settings → Forwarding and POP/IMAP</li>
-        <li>
-          Google Account → Security → 2-Step Verification → App passwords → create one for Mail
-        </li>
-        <li>Paste your Gmail address and that 16-character app password below, then start watch</li>
-      </ol>
 
       <div className={`mail-watch-banner ${watching ? 'on' : ''}`}>
         <span className="live-dot" />
         {watching
-          ? `Watching ${imapStatus.username} every ${imapStatus.interval_seconds}s`
+          ? `Watching ${imapStatus.username || 'inbox'} every ${imapStatus.interval_seconds}s`
           : 'Inbox watch is off'}
         {imapStatus?.last_phishing ? ` · phishing hits: ${imapStatus.last_phishing}` : ''}
       </div>
 
-      <form className="form" onSubmit={handleImapConnect}>
-        <label>
-          Mail provider
-          <select value={imapHost} onChange={(e) => setImapHost(e.target.value)}>
-            <option value="imap.gmail.com">Gmail (imap.gmail.com)</option>
-            <option value="outlook.office365.com">Outlook / Hotmail (outlook.office365.com)</option>
-          </select>
-        </label>
-        <label>
-          Email address
-          <input
-            value={imapUser}
-            onChange={(e) => setImapUser(e.target.value)}
-            placeholder="you@gmail.com"
-            autoComplete="username"
-          />
-        </label>
-        <label>
-          App password
-          <input
-            type="password"
-            value={imapPass}
-            onChange={(e) => setImapPass(e.target.value)}
-            placeholder="16-character app password"
-            autoComplete="current-password"
-          />
-        </label>
-        <div className="action-bar compact">
-          <button className="btn btn-primary" type="submit" disabled={imapBusy || !imapUser || !imapPass}>
-            {imapBusy ? 'Connecting…' : watching ? 'Reconnect inbox' : 'Start watching my inbox'}
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={handleImapPoll} disabled={imapBusy || !watching}>
-            Check inbox now
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={handleImapStop} disabled={imapBusy || !watching}>
-            Stop
-          </button>
+      <div className="action-bar compact" style={{ marginBottom: '0.85rem' }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={imapBusy}
+          onClick={handleOutlookStart}
+        >
+          {imapBusy ? 'Connecting…' : 'Watch Outlook already signed in on this PC'}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={handleImapPoll} disabled={imapBusy || !watching}>
+          Check inbox now
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={handleImapStop} disabled={imapBusy || !watching}>
+          Stop
+        </button>
+      </div>
+      <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
+        {outlookInstalled
+          ? 'Classic Outlook was found on this PC. Open Outlook, stay signed in, then click the button. If Windows asks to allow access, click Allow.'
+          : 'Classic Outlook was not found. The new Outlook Store app and Gmail-in-Chrome cannot be read. Use Gmail App Password below, or install classic Outlook.'}
+      </p>
+      {imapStatus?.last_message ? (
+        <div className="muted mono" style={{ fontSize: '0.78rem', marginBottom: '0.85rem' }}>
+          {imapStatus.last_error ? `Error: ${imapStatus.last_error}` : imapStatus.last_message}
         </div>
-        {imapStatus?.last_message ? (
-          <div className="muted mono" style={{ fontSize: '0.78rem' }}>
-            {imapStatus.last_error ? `Error: ${imapStatus.last_error}` : imapStatus.last_message}
+      ) : null}
+
+      <details className="mail-manual" open={!outlookInstalled}>
+        <summary>Gmail / web Outlook — App Password (required; browser login will not work)</summary>
+        <ol className="mail-steps">
+          <li>Gmail: Settings → See all settings → Forwarding and POP/IMAP → Enable IMAP</li>
+          <li>Google Account → Security → 2-Step Verification → App passwords → create one for Mail</li>
+          <li>Paste email + 16-character app password, then start watch</li>
+        </ol>
+        <form className="form" onSubmit={handleImapConnect}>
+          <label>
+            Mail provider
+            <select value={imapHost} onChange={(e) => setImapHost(e.target.value)}>
+              <option value="imap.gmail.com">Gmail (imap.gmail.com)</option>
+              <option value="outlook.office365.com">Outlook / Hotmail (outlook.office365.com)</option>
+            </select>
+          </label>
+          <label>
+            Email address
+            <input
+              value={imapUser}
+              onChange={(e) => setImapUser(e.target.value)}
+              placeholder="you@gmail.com"
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            App password
+            <input
+              type="password"
+              value={imapPass}
+              onChange={(e) => setImapPass(e.target.value)}
+              placeholder="16-character app password"
+              autoComplete="current-password"
+            />
+          </label>
+          <div className="action-bar compact">
+            <button className="btn btn-primary" type="submit" disabled={imapBusy || !imapUser || !imapPass}>
+              {imapBusy ? 'Connecting…' : 'Start Gmail/IMAP watch'}
+            </button>
           </div>
-        ) : null}
-      </form>
+        </form>
+      </details>
 
       {result ? (
         <div className={`mail-verdict ${phishing ? 'bad' : 'ok'}`}>

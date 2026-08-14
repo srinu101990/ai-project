@@ -33,6 +33,7 @@ from .file_guard import (
     scan_folders,
 )
 from .mail_guard import autostart_mail_watch, check_and_store, mail_monitor, parse_eml_bytes, scan_drop_folder
+from .outlook_local import autostart_outlook_watch, outlook_installed, outlook_monitor
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
@@ -98,6 +99,7 @@ def _boot_background_watchers() -> None:
     autostart_monitor()
     autostart_demo_feed()
     autostart_mail_watch()
+    autostart_outlook_watch()
     autostart_file_watch()
     autostart_endpoint_watch()
 
@@ -119,6 +121,7 @@ async def lifespan(_: FastAPI):
     finally:
         demo_feed.stop()
         mail_monitor.stop()
+        outlook_monitor.stop()
         file_monitor.stop()
         endpoint_monitor.stop()
         monitor.stop()
@@ -342,22 +345,34 @@ def mail_scan_drop(db: Session = Depends(get_db)):
     return scan_drop_folder(db)
 
 
+def _mail_status_payload() -> dict:
+    outlook = outlook_monitor.status()
+    imap = mail_monitor.status()
+    installed = outlook_installed()
+    if outlook.get("enabled"):
+        return {**outlook, "outlook_installed": installed, "channel": "outlook"}
+    channel = "imap" if imap.get("enabled") else "off"
+    return {**imap, "outlook_installed": installed, "channel": channel}
+
+
 @app.get("/api/mail/status", response_model=MailImapStatus)
 def mail_status():
-    return mail_monitor.status()
+    return _mail_status_payload()
 
 
 @app.post("/api/mail/imap/connect", response_model=MailImapStatus)
 def mail_imap_connect(payload: MailImapConnectRequest):
-    """Connect to Gmail/Outlook and start watching new inbox mail."""
+    """Connect to Gmail/Outlook IMAP with an app password."""
     try:
-        return mail_monitor.connect(
+        outlook_monitor.stop(forget=True)
+        status = mail_monitor.connect(
             host=payload.host,
             username=payload.username,
             password=payload.password,
             mailbox=payload.mailbox or "INBOX",
             interval_seconds=payload.interval_seconds or 20,
         )
+        return {**status, "channel": "imap", "outlook_installed": outlook_installed()}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -365,14 +380,46 @@ def mail_imap_connect(payload: MailImapConnectRequest):
 @app.post("/api/mail/imap/poll", response_model=MailImapStatus)
 def mail_imap_poll():
     try:
-        return mail_monitor.poll_once()
+        if outlook_monitor.status().get("enabled"):
+            status = outlook_monitor.poll_once()
+            return {**status, "channel": "outlook", "outlook_installed": True}
+        status = mail_monitor.poll_once()
+        return {**status, "channel": "imap", "outlook_installed": outlook_installed()}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/mail/imap/stop", response_model=MailImapStatus)
 def mail_imap_stop():
-    return mail_monitor.stop()
+    outlook_monitor.stop(forget=True)
+    status = mail_monitor.stop()
+    return {**status, "channel": "off", "outlook_installed": outlook_installed()}
+
+
+@app.post("/api/mail/outlook/start", response_model=MailImapStatus)
+def mail_outlook_start():
+    """Watch classic Outlook already signed in on this Windows PC (no password)."""
+    try:
+        mail_monitor.stop()
+        status = outlook_monitor.start(interval_seconds=20, persist=True)
+        return {**status, "channel": "outlook", "outlook_installed": True}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mail/outlook/poll", response_model=MailImapStatus)
+def mail_outlook_poll():
+    try:
+        status = outlook_monitor.poll_once()
+        return {**status, "channel": "outlook", "outlook_installed": True}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mail/outlook/stop", response_model=MailImapStatus)
+def mail_outlook_stop():
+    status = outlook_monitor.stop(forget=True)
+    return {**status, "channel": "off", "outlook_installed": outlook_installed()}
 
 
 @app.get("/api/files/status", response_model=FileWatchStatus)
@@ -500,7 +547,7 @@ def setup_status():
             detail=(
                 f"Watching {mail.get('username')}"
                 if mail.get("enabled")
-                else "Open My Mail and start inbox watch with an app password"
+                else "Open My Mail: Watch Outlook on this PC, or Gmail with an app password"
             ),
             tab="mail",
         ),

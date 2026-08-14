@@ -122,6 +122,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  startOutlookWatch: () =>
+    request('/mail/outlook/start', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  pollOutlookWatch: () =>
+    request('/mail/outlook/poll', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  stopOutlookWatch: () =>
+    request('/mail/outlook/stop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   fileStatus: () => request('/files/status'),
   startFileWatch: () =>
     request('/files/start', {
