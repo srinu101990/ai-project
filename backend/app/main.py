@@ -39,6 +39,7 @@ from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
 from .network_scanner import _local_ipv4
 from .remote_agents import agent_registry, ingest_agent_heartbeat
+from .report import build_report_summary, generate_pdf_report, get_stats
 from .schemas import (
     AgentHeartbeatRequest,
     AgentHeartbeatResponse,
