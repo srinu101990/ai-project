@@ -145,6 +145,8 @@ Use the **laptop phishing mail** copy of this project (the branch with My Mail +
 
 Gmail: enable IMAP, then create an App Password under Google Account → Security → 2-Step Verification → App passwords.
 
+If the button stays on **Connecting…**, close the black window, use this latest zip, and try again. The dashboard now stops after about 12 seconds and shows the real reason (wrong password, IMAP off, or the network blocking port 993). A Gmail login in Chrome is not enough — only an App Password or classic Outlook on this PC works.
+
 The connection is saved on this laptop (`data/mail_settings.json`) and resumes when you start the app again.
 
 ### Files and remaining malware families (this laptop)

@@ -1,24 +1,61 @@
 const BASE = '/api'
 
+function errorMessage(raw, fallback) {
+  if (!raw) return fallback
+  try {
+    const data = JSON.parse(raw)
+    if (typeof data.detail === 'string') return data.detail
+    if (Array.isArray(data.detail)) {
+      return data.detail
+        .map((item) => item.msg || item.message || JSON.stringify(item))
+        .join('; ')
+    }
+  } catch {
+    /* not JSON */
+  }
+  return raw
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(`${BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-    ...options,
-  })
-
-  if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(detail || `Request failed: ${response.status}`)
+  const { timeoutMs = 25000, timeoutMessage, headers, signal, ...rest } = options
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  if (signal) {
+    if (signal.aborted) controller.abort()
+    else signal.addEventListener('abort', () => controller.abort(), { once: true })
   }
 
-  const type = response.headers.get('content-type') || ''
-  if (type.includes('application/pdf')) {
-    return response.blob()
+  try {
+    const response = await fetch(`${BASE}${path}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(headers || {}),
+      },
+      ...rest,
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new Error(errorMessage(detail, `Request failed: ${response.status}`))
+    }
+
+    const type = response.headers.get('content-type') || ''
+    if (type.includes('application/pdf')) {
+      return response.blob()
+    }
+    return response.json()
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error(
+        timeoutMessage ||
+          'The server did not answer in time. Keep the black window open and try again.',
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
   }
-  return response.json()
 }
 
 export const api = {
@@ -97,7 +134,7 @@ export const api = {
       body,
     })
     if (!response.ok) {
-      throw new Error((await response.text()) || 'Upload failed')
+      throw new Error(errorMessage(await response.text(), 'Upload failed'))
     }
     return response.json()
   },
@@ -111,11 +148,15 @@ export const api = {
     request('/mail/imap/connect', {
       method: 'POST',
       body: JSON.stringify(payload),
+      timeoutMs: 18000,
+      timeoutMessage:
+        'Gmail did not answer in time. Enable IMAP, use a 16-character App Password (not your normal password), and check that port 993 is not blocked.',
     }),
   pollMailImap: () =>
     request('/mail/imap/poll', {
       method: 'POST',
       body: JSON.stringify({}),
+      timeoutMs: 18000,
     }),
   stopMailImap: () =>
     request('/mail/imap/stop', {
@@ -126,6 +167,7 @@ export const api = {
     request('/mail/outlook/start', {
       method: 'POST',
       body: JSON.stringify({}),
+      timeoutMs: 20000,
     }),
   pollOutlookWatch: () =>
     request('/mail/outlook/poll', {
@@ -166,7 +208,7 @@ export const api = {
       body,
     })
     if (!response.ok) {
-      throw new Error((await response.text()) || 'Upload failed')
+      throw new Error(errorMessage(await response.text(), 'Upload failed'))
     }
     return response.json()
   },
@@ -194,7 +236,7 @@ export const api = {
     }),
   reportSummary: () => request('/reports/summary'),
   downloadReport: async () => {
-    const blob = await request('/reports/pdf')
+    const blob = await request('/reports/pdf', { timeoutMs: 60000 })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

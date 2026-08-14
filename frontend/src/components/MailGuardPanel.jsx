@@ -29,6 +29,7 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
   const [imapPass, setImapPass] = useState('')
   const [imapStatus, setImapStatus] = useState(mailStatus || null)
   const [imapBusy, setImapBusy] = useState(false)
+  const [outlookBusy, setOutlookBusy] = useState(false)
 
   useEffect(() => {
     if (mailStatus) setImapStatus(mailStatus)
@@ -137,7 +138,7 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
   }
 
   async function handleOutlookStart() {
-    setImapBusy(true)
+    setOutlookBusy(true)
     try {
       const status = await api.startOutlookWatch()
       setImapStatus(status)
@@ -152,7 +153,7 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
           'Could not read Outlook. Open classic Outlook, sign in, then click Allow if Windows asks.',
       )
     } finally {
-      setImapBusy(false)
+      setOutlookBusy(false)
     }
   }
 
@@ -160,6 +161,7 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
   const watching = Boolean(imapStatus?.enabled)
   const outlookMode = imapStatus?.channel === 'outlook'
   const outlookInstalled = Boolean(imapStatus?.outlook_installed)
+  const busy = imapBusy || outlookBusy
 
   return (
     <div className="panel section mail-guard-panel">
@@ -191,15 +193,15 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={imapBusy}
+          disabled={busy}
           onClick={handleOutlookStart}
         >
-          {imapBusy ? 'Connecting…' : 'Watch Outlook already signed in on this PC'}
+          {outlookBusy ? 'Connecting…' : 'Watch Outlook already signed in on this PC'}
         </button>
-        <button type="button" className="btn btn-ghost" onClick={handleImapPoll} disabled={imapBusy || !watching}>
+        <button type="button" className="btn btn-ghost" onClick={handleImapPoll} disabled={busy || !watching}>
           Check inbox now
         </button>
-        <button type="button" className="btn btn-ghost" onClick={handleImapStop} disabled={imapBusy || !watching}>
+        <button type="button" className="btn btn-ghost" onClick={handleImapStop} disabled={busy || !watching}>
           Stop
         </button>
       </div>
@@ -208,7 +210,7 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
           ? 'Classic Outlook was found on this PC. Open Outlook, stay signed in, then click the button. If Windows asks to allow access, click Allow.'
           : 'Classic Outlook was not found. The new Outlook Store app and Gmail-in-Chrome cannot be read. Use Gmail App Password below, or install classic Outlook.'}
       </p>
-      {imapStatus?.last_message ? (
+      {imapStatus?.last_message || imapStatus?.last_error ? (
         <div className="muted mono" style={{ fontSize: '0.78rem', marginBottom: '0.85rem' }}>
           {imapStatus.last_error ? `Error: ${imapStatus.last_error}` : imapStatus.last_message}
         </div>
@@ -249,7 +251,7 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
             />
           </label>
           <div className="action-bar compact">
-            <button className="btn btn-primary" type="submit" disabled={imapBusy || !imapUser || !imapPass}>
+            <button className="btn btn-primary" type="submit" disabled={busy || !imapUser || !imapPass}>
               {imapBusy ? 'Connecting…' : 'Start Gmail/IMAP watch'}
             </button>
           </div>

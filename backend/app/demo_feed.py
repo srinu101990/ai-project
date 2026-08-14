@@ -372,22 +372,22 @@ class DemoThreatFeed:
         with self._lock:
             if interval_seconds is not None:
                 self._interval = max(10, min(600, int(interval_seconds)))
-            if self._running and self._thread and self._thread.is_alive():
-                return self.status()
-            self._stop.clear()
-            self._running = True
-            self._mode = "sequential"
-            self._last_error = None
-            self._next_type = DEMO_SAMPLES[self._type_index % len(DEMO_SAMPLES)][
-                "threat_hint"
-            ]
-            self._thread = threading.Thread(
-                target=self._loop,
-                name="demo-threat-feed-sequential",
-                daemon=True,
-            )
-            self._thread.start()
-            return self.status()
+            already = bool(self._running and self._thread and self._thread.is_alive())
+            if not already:
+                self._stop.clear()
+                self._running = True
+                self._mode = "sequential"
+                self._last_error = None
+                self._next_type = DEMO_SAMPLES[self._type_index % len(DEMO_SAMPLES)][
+                    "threat_hint"
+                ]
+                self._thread = threading.Thread(
+                    target=self._loop,
+                    name="demo-threat-feed-sequential",
+                    daemon=True,
+                )
+                self._thread.start()
+        return self.status()
 
     def stop(self) -> dict[str, Any]:
         with self._lock:
@@ -400,7 +400,7 @@ class DemoThreatFeed:
             self._injecting = False
             self._thread = None
             self._mode = "stopped"
-            return self.status()
+        return self.status()
 
     def _loop(self) -> None:
         while not self._stop.is_set():

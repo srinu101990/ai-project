@@ -510,7 +510,7 @@ class FileFolderMonitor:
             self._scanning = False
             self._thread = None
             self._last_message = "Folder watch stopped"
-            return self.status()
+        return self.status()
 
     def scan_once(self) -> dict[str, Any]:
         from .database import SessionLocal

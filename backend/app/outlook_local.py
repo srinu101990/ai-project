@@ -159,6 +159,7 @@ class OutlookInboxMonitor:
             SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
             _write_json(SETTINGS_PATH, {"enabled": True, "interval_seconds": int(interval_seconds)})
         self.stop(forget=False)
+        thread = threading.Thread(target=self._loop, name="outlook-local-watch", daemon=True)
         with self._lock:
             self._username = probe.get("account") or "Outlook"
             self._interval = max(15, min(120, int(interval_seconds)))
@@ -166,12 +167,9 @@ class OutlookInboxMonitor:
             self._last_message = f"Watching Outlook inbox already signed in as {self._username}"
             self._stop.clear()
             self._running = True
-            self._thread = threading.Thread(target=self._loop, name="outlook-local-watch", daemon=True)
-            self._thread.start()
-        try:
-            return self.poll_once()
-        except Exception:
-            return self.status()
+            self._thread = thread
+        thread.start()
+        return self.status()
 
     def stop(self, *, forget: bool = False) -> dict[str, Any]:
         with self._lock:
@@ -186,7 +184,7 @@ class OutlookInboxMonitor:
             self._polling = False
             self._thread = None
             self._last_message = "Outlook inbox watch stopped"
-            return {**self.status(), "enabled": False, "channel": "off"}
+        return {**self.status(), "enabled": False, "channel": "off"}
 
     def poll_once(self) -> dict[str, Any]:
         from .database import SessionLocal

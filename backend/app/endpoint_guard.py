@@ -559,7 +559,7 @@ class EndpointMalwareMonitor:
             self._scanning = False
             self._thread = None
             self._last_message = "Laptop malware watch stopped"
-            return self.status()
+        return self.status()
 
     def scan_once(self) -> dict[str, Any]:
         from .database import SessionLocal

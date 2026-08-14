@@ -7,8 +7,9 @@ import imaplib
 import json
 import os
 import re
+import socket
+import ssl
 import threading
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.header import decode_header, make_header
@@ -29,6 +30,60 @@ SEEN_PATH = PROJECT_ROOT / "data" / "mail_seen.json"
 
 DROP_DIR.mkdir(parents=True, exist_ok=True)
 SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+# Gmail/Outlook IMAP must not hang the dashboard if the network blocks port 993.
+IMAP_TIMEOUT_SECONDS = 12
+
+
+def _open_imap(host: str) -> imaplib.IMAP4_SSL:
+    return imaplib.IMAP4_SSL(host, timeout=IMAP_TIMEOUT_SECONDS)
+
+
+def _friendly_imap_error(exc: BaseException, *, host: str = "") -> str:
+    text = str(exc)
+    lower = text.lower()
+    target = host or "the mail server"
+    timed_out = isinstance(exc, TimeoutError) or "timed out" in lower or "timeout" in lower
+    if timed_out:
+        return (
+            f"{target} did not answer in {IMAP_TIMEOUT_SECONDS} seconds. "
+            "Check internet, turn on IMAP, and make sure the network is not blocking port 993."
+        )
+    if isinstance(exc, socket.gaierror) or "name or service not known" in lower or "getaddrinfo" in lower:
+        return f"Could not find mail server {target}. Check the provider dropdown and internet."
+    if isinstance(exc, ConnectionRefusedError) or "connection refused" in lower:
+        return f"Could not reach {target} on port 993. Check internet or try another network."
+    if isinstance(exc, (OSError, ssl.SSLError)) and not isinstance(exc, imaplib.IMAP4.error):
+        return f"Could not reach {target}. Check internet or that IMAP (port 993) is not blocked."
+    if any(
+        hint in lower
+        for hint in (
+            "web login required",
+            "please log in via your web browser",
+            "imap access is disabled",
+            "application-specific password",
+        )
+    ):
+        return (
+            "IMAP is off or Google blocked the login. "
+            "Gmail: Settings → See all settings → Forwarding and POP/IMAP → Enable IMAP. "
+            "Then paste a 16-character App Password, not your normal password."
+        )
+    if any(
+        hint in lower
+        for hint in (
+            "authentication failed",
+            "invalid credentials",
+            "username and password not accepted",
+            "login failed",
+            "authenticate failed",
+        )
+    ):
+        return (
+            "Login failed. Gmail and Outlook will not accept your normal password. "
+            "Turn on 2-Step Verification, create a 16-character App Password, and paste that here."
+        )
+    return f"Could not connect to inbox: {text}"
 
 
 def _local_ip() -> str:
@@ -275,7 +330,7 @@ class MailInboxMonitor:
             }
 
     def _test_login(self, host: str, username: str, password: str, mailbox: str) -> None:
-        client = imaplib.IMAP4_SSL(host)
+        client = _open_imap(host)
         try:
             client.login(username, password)
             typ, _ = client.select(mailbox, readonly=True)
@@ -303,7 +358,10 @@ class MailInboxMonitor:
         mailbox = (mailbox or "INBOX").strip()
         if not host or not username or not password:
             raise RuntimeError("IMAP host, email, and app password are required")
-        self._test_login(host, username, password, mailbox)
+        try:
+            self._test_login(host, username, password, mailbox)
+        except Exception as exc:
+            raise RuntimeError(_friendly_imap_error(exc, host=host)) from exc
         if persist:
             _write_json(
                 SETTINGS_PATH,
@@ -316,6 +374,7 @@ class MailInboxMonitor:
                 },
             )
         self.stop()
+        thread = threading.Thread(target=self._loop, name="mail-imap-watch", daemon=True)
         with self._lock:
             self._host = host
             self._username = username
@@ -323,15 +382,14 @@ class MailInboxMonitor:
             self._mailbox = mailbox
             self._interval = max(15, min(600, int(interval_seconds)))
             self._last_error = None
-            self._last_message = f"Watching inbox {username} on {host}"
+            self._last_message = f"Connected. Watching inbox {username} on {host}"
             self._stop.clear()
             self._running = True
-            self._thread = threading.Thread(target=self._loop, name="mail-imap-watch", daemon=True)
-            self._thread.start()
-        try:
-            return self.poll_once()
-        except Exception:
-            return self.status()
+            self._thread = thread
+        thread.start()
+        # Return immediately so the dashboard does not sit on "Connecting…".
+        # The watch thread polls the inbox in the background.
+        return self.status()
 
     def stop(self, *, forget: bool = False) -> dict[str, Any]:
         with self._lock:
@@ -346,7 +404,7 @@ class MailInboxMonitor:
             self._polling = False
             self._thread = None
             self._last_message = "Inbox watch stopped"
-            return self.status()
+        return self.status()
 
     def poll_once(self) -> dict[str, Any]:
         from .database import SessionLocal
@@ -360,8 +418,9 @@ class MailInboxMonitor:
         db = SessionLocal()
         created = 0
         phishing_hits = 0
+        client = None
         try:
-            client = imaplib.IMAP4_SSL(host)
+            client = _open_imap(host)
             client.login(user, password)
             typ, _ = client.select(mailbox, readonly=True)
             if typ != "OK":
@@ -394,7 +453,11 @@ class MailInboxMonitor:
                 seen_ids.append(key)
                 created += 1
             _write_json(SEEN_PATH, seen_ids[-800:])
-            client.logout()
+            try:
+                client.logout()
+            except Exception:
+                pass
+            client = None
             if phishing_hits:
                 message = (
                     f"PHISHING DETECTED in {phishing_hits} new mail(s) for {user}. "
@@ -417,32 +480,31 @@ class MailInboxMonitor:
                 **self.status(),
             }
         except Exception as exc:
+            friendly = _friendly_imap_error(exc, host=host)
             with self._lock:
-                self._last_error = str(exc)
-                self._last_message = f"Inbox poll failed: {exc}"
+                self._last_error = friendly
+                self._last_message = f"Inbox poll failed: {friendly}"
                 self._last_at = datetime.now(timezone.utc)
-            raise
+            raise RuntimeError(friendly) from exc
         finally:
+            if client is not None:
+                try:
+                    client.logout()
+                except Exception:
+                    pass
             db.close()
             with self._lock:
                 self._polling = False
 
     def _loop(self) -> None:
-        waited = 0.0
-        interval = float(self._interval)
-        while waited < interval and not self._stop.is_set():
-            time.sleep(min(1.0, interval - waited))
-            waited += 1.0
         while not self._stop.is_set():
             try:
                 self.poll_once()
             except Exception:
                 pass
-            waited = 0.0
             interval = float(self._interval)
-            while waited < interval and not self._stop.is_set():
-                time.sleep(min(1.0, interval - waited))
-                waited += 1.0
+            if self._stop.wait(interval):
+                break
 
 
 mail_monitor = MailInboxMonitor()
