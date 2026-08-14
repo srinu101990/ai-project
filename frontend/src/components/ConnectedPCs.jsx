@@ -16,12 +16,18 @@ function formatTime(value) {
 export default function ConnectedPCs({ agentStatus, onToast }) {
   const agents = agentStatus?.agents || []
   const command = agentStatus?.join_command || 'python sentinel_agent.py --server http://<dashboard-ip>:8000'
+  const injectCommand =
+    agentStatus?.inject_command || `${command} --inject phishing`
+  const injectAllCommand =
+    agentStatus?.inject_all_command || `${command} --inject-all --delay 8`
   const downloadHref = agentStatus?.agent_download || '/agent/sentinel_agent.py'
+  const launcherHref = agentStatus?.agent_launcher || '/agent/start-agent.bat'
+  const lanUrl = agentStatus?.lan_url || ''
 
-  async function copyCommand() {
+  async function copyText(value, label) {
     try {
-      await navigator.clipboard.writeText(command)
-      onToast?.('Join command copied')
+      await navigator.clipboard.writeText(value)
+      onToast?.(label)
     } catch {
       onToast?.('Copy failed — select the command manually')
     }
@@ -30,35 +36,76 @@ export default function ConnectedPCs({ agentStatus, onToast }) {
   return (
     <section className="panel section connected-pcs-panel">
       <div className="section-head">
-        <h3>Connected PCs</h3>
+        <h3>Second laptop — live demo</h3>
         <span>
-          {agentStatus?.connected ?? 0} remote agent
+          {agentStatus?.connected ?? 0} remote PC
           {(agentStatus?.connected ?? 0) === 1 ? '' : 's'} online
         </span>
       </div>
       <p className="muted source-copy">
-        The dashboard PC cannot read processes inside other computers by itself. Install this
-        agent on each PC you are allowed to monitor. That PC then sends hostname, IP, processes,
-        and open ports here for AI classification.
+        This dashboard scans the LAN in real time. To show mail and malware from{' '}
+        <strong> another laptop</strong>, run the agent on that PC (same Wi-Fi). When you
+        send a phishing mail or inject virus / worm / trojan / ransomware there, this
+        screen pops up, the charts update, and the threat feed lists it as if the whole
+        network is being watched.
       </p>
+      {lanUrl ? (
+        <div className="muted mono" style={{ fontSize: '0.78rem', marginBottom: '0.7rem' }}>
+          Main laptop LAN URL (allow Windows Firewall): {lanUrl}
+        </div>
+      ) : null}
+      <ol className="mail-steps">
+        <li>On the second laptop, copy <code>agent/</code> or download the files below.</li>
+        <li>
+          Double-click <code>start-agent.bat</code> (or run the watch command) and paste the
+          LAN URL.
+        </li>
+        <li>
+          Wait until this card shows <strong>LIVE</strong>, then inject <strong>phishing</strong>.
+          A popup appears here within a few seconds.
+        </li>
+        <li>Inject the other malware types one by one. Graphs update as each family arrives.</li>
+      </ol>
       <div className="join-box">
         <div className="muted" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>
-          On another PC on the same LAN (Python 3, no extra install):
+          Watch command (leave it running):
         </div>
         <code className="join-command mono">{command}</code>
+        <div className="muted" style={{ fontSize: '0.78rem', margin: '0.65rem 0 0.35rem' }}>
+          Phishing from that laptop:
+        </div>
+        <code className="join-command mono">{injectCommand}</code>
+        <div className="muted" style={{ fontSize: '0.78rem', margin: '0.65rem 0 0.35rem' }}>
+          Every family, one by one:
+        </div>
+        <code className="join-command mono">{injectAllCommand}</code>
         <div className="action-bar compact" style={{ marginTop: '0.7rem', marginBottom: 0 }}>
           <a className="btn btn-primary" href={downloadHref} download="sentinel_agent.py">
             <Download size={16} />
             Download agent
           </a>
-          <button type="button" className="btn btn-ghost" onClick={copyCommand}>
+          <a className="btn btn-secondary" href={launcherHref} download="start-agent.bat">
+            <Download size={16} />
+            Download start-agent.bat
+          </a>
+          <button type="button" className="btn btn-ghost" onClick={() => copyText(command, 'Watch command copied')}>
             <Copy size={16} />
-            Copy command
+            Copy watch command
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => copyText(injectCommand, 'Phishing inject command copied')}
+          >
+            <Copy size={16} />
+            Copy phishing inject
           </button>
         </div>
       </div>
       {agents.length === 0 ? (
-        <div className="empty">No remote PCs yet. Run the agent on a second computer, then wait ~20 seconds.</div>
+        <div className="empty">
+          No second laptop yet. Start the agent on the other PC, then wait a few seconds.
+        </div>
       ) : (
         <div className="connected-pc-grid">
           {agents.map((pc) => (

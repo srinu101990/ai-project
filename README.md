@@ -16,7 +16,8 @@ The UI follows a neon cyber-ops aesthetic: threat definition cards, KPI tiles, l
 | AI Classification | Hybrid ML (TF-IDF + Logistic Regression) + explainable rule indicators |
 | Real-time Visualization | Live dashboard with source cards, pie, and severity charts |
 | Reporting | Executive summary + downloadable PDF decision report |
-| Network access | Server binds to `0.0.0.0` so other devices on the LAN can open the dashboard |
+| Network access | Server binds to `0.0.0.0` so a second laptop on the same Wi-Fi can send live findings |
+| Second-laptop demo | `agent/sentinel_agent.py` reports phishing mail and every malware family to the main dashboard |
 
 ## Project structure
 
@@ -173,8 +174,30 @@ Optional file check: **Drop test samples** writes harmless labeled files so you 
 
 ### Network and other PCs
 
-- **Sources → Sweep All Sources Now** or **Projection Burst** for the six live collectors
-- Other PCs: copy `agent/sentinel_agent.py` and run `python sentinel_agent.py --server http://<dashboard-lan-ip>:8000`
+- **Sources → Sweep All Sources Now** — real-time scan of six channels at once (Network IDS, Endpoint, Firewall, DNS, Email, Auth)
+- **Projection Burst** — same sweep plus one classified event per source so every card lights up
+- **Second laptop (final viva):** copy `agent/` to the other PC, run `start-agent.bat`, then inject phishing and each malware type. The main laptop pops up and the charts update.
+
+## Final viva — two laptops
+
+Keep the dashboard on the **main laptop**. The **second laptop** only runs the agent (Python 3, no extra packages).
+
+1. Main laptop: `start-offline.bat`, leave the black window open. If Windows Firewall asks, click **Allow**.
+2. Note the LAN URL on the dashboard **Second laptop — live demo** card (example `http://192.168.1.24:8000`).
+3. Copy the `agent` folder to the second laptop (USB or download `sentinel_agent.py` + `start-agent.bat` from that card).
+4. On the second laptop, same Wi-Fi, double-click `start-agent.bat` and paste the LAN URL.
+5. When the card shows **LIVE**, choose **[1] Inject PHISHING mail**. The main laptop shows **PHISHING DETECTED**, the feed, and the charts.
+6. Inject virus, worm, trojan, ransomware, … one by one (or **[A] Inject ALL**). Each type pops on the main dashboard.
+7. Optional live mail: save a phishing `.eml` into `agent/inbox_drop` on the second laptop, or run the agent with `--mail` + App Password / `--outlook`.
+8. On the main laptop click **Sweep All Sources Now** and say the same pipeline watches the LAN; the second PC is the inside-host sensor for that host.
+
+You do **not** need to install real malware. `--inject` sends a labeled finding from that laptop’s hostname/IP. The AI module on the main laptop classifies it.
+
+```bash
+python sentinel_agent.py --server http://<main-laptop-lan-ip>:8000
+python sentinel_agent.py --server http://<main-laptop-lan-ip>:8000 --inject phishing
+python sentinel_agent.py --server http://<main-laptop-lan-ip>:8000 --inject-all --delay 8
+```
 
 ## How multi-source collection works
 
@@ -206,7 +229,7 @@ The dashboard PC cannot read processes inside another computer just by sitting o
 python sentinel_agent.py --server http://<dashboard-lan-ip>:8000
 ```
 
-That PC appears under **Connected PCs** with its **hostname and IP**. It reports local processes and listening ports; the dashboard classifies them with the AI model.
+That PC appears under **Second laptop — live demo** with its **hostname and IP**. It reports mail, files, processes, and ports; the dashboard AI classifies them. Use `--inject phishing` (and other types) so the popup is guaranteed during the viva.
 
 Network IDS still probes other LAN IPs for **open ports** without an agent (ARP neighbors + TCP connect). That is exposure only, not an inside view of the remote PC.
 
@@ -236,6 +259,7 @@ No root/pcap privileges are required. This is TCP connect scanning + host connec
 - `GET /api/agents` — remote PCs running the agent
 - `POST /api/agents/heartbeat` — agent report from another PC
 - `GET /agent/sentinel_agent.py` — download the remote PC agent
+- `GET /agent/start-agent.bat` — Windows menu launcher for the second laptop
 - `POST /api/classify` — classify arbitrary threat text
 - `GET /api/setup` — download-and-test checklist status
 - `POST /api/mail/imap/connect` — start watching a Gmail/Outlook inbox

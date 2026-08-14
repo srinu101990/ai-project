@@ -37,7 +37,7 @@ from .outlook_local import autostart_outlook_watch, outlook_installed, outlook_m
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
-from .network_scanner import resolve_scan_network
+from .network_scanner import _local_ipv4
 from .remote_agents import agent_registry, ingest_agent_heartbeat
 from .schemas import (
     AgentHeartbeatRequest,
@@ -166,9 +166,16 @@ def offline_swagger_ui():
     )
 
 
+def _safe_lan_ip() -> str:
+    try:
+        return _local_ipv4()
+    except Exception:
+        return "127.0.0.1"
+
+
 @app.get("/api/health")
 def health():
-    """Liveness probe — no network I/O so Windows startup can open the UI immediately."""
+    """Liveness probe. Avoids LAN host scans so Windows can open the UI immediately."""
     mon = monitor.status()
     demo = demo_feed.status()
     hub = source_hub.status()
@@ -189,6 +196,7 @@ def health():
         "bind_host": BIND_HOST,
         "bind_port": BIND_PORT,
         "local_ip": mon.get("last_local_ip"),
+        "lan_ip": _safe_lan_ip(),
         "scan_subnet": SCAN_SUBNET or mon.get("last_subnet"),
         "frontend_bundled": FRONTEND_DIST.exists(),
     }
@@ -258,12 +266,12 @@ def projection_multi_source_burst(db: Session = Depends(get_db)):
 
 
 def _join_command() -> str:
-    local_ip = "127.0.0.1"
-    try:
-        local_ip, _network = resolve_scan_network()
-    except Exception:
-        pass
+    local_ip = _safe_lan_ip()
     return f"python sentinel_agent.py --server http://{local_ip}:{BIND_PORT}"
+
+
+def _inject_command(kind: str = "phishing") -> str:
+    return f"{_join_command()} --inject {kind}"
 
 
 @app.get("/api/agents", response_model=RemoteAgentStatus)
@@ -271,7 +279,12 @@ def list_remote_agents():
     """PCs on the LAN that are running the remote agent."""
     payload = agent_registry.status()
     payload["join_command"] = _join_command()
+    payload["inject_command"] = _inject_command("phishing")
+    payload["inject_all_command"] = f"{_join_command()} --inject-all --delay 8"
     payload["agent_download"] = "/agent/sentinel_agent.py"
+    payload["agent_launcher"] = "/agent/start-agent.bat"
+    payload["lan_ip"] = _safe_lan_ip()
+    payload["lan_url"] = f"http://{_safe_lan_ip()}:{BIND_PORT}"
     return payload
 
 
@@ -300,6 +313,18 @@ def download_remote_agent():
         path,
         media_type="text/x-python",
         filename="sentinel_agent.py",
+    )
+
+
+@app.get("/agent/start-agent.bat", include_in_schema=False)
+def download_remote_agent_launcher():
+    path = PROJECT_ROOT / "agent" / "start-agent.bat"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Agent launcher not found")
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        filename="start-agent.bat",
     )
 
 
@@ -523,7 +548,7 @@ def setup_status():
             id="app",
             title="Dashboard is running on this laptop",
             done=True,
-            detail="Open http://127.0.0.1:8000",
+            detail=f"This PC: http://127.0.0.1:8000 · Second laptop: http://{_safe_lan_ip()}:8000",
             tab="dashboard",
         ),
         SetupStepOut(
@@ -560,13 +585,13 @@ def setup_status():
         ),
         SetupStepOut(
             id="agents",
-            title="Other PCs (optional)",
+            title="Final demo — connect a second laptop",
             done=int(agents.get("connected") or 0) > 0,
             optional=True,
             detail=(
-                f"{agents.get('connected', 0)} PC(s) connected"
+                f"{agents.get('connected', 0)} PC(s) online — inject phishing from that laptop"
                 if agents.get("connected")
-                else "Run sentinel_agent.py on another PC if you want inside-host data"
+                else f"On the other PC run: python sentinel_agent.py --server http://{_safe_lan_ip()}:{BIND_PORT} --inject phishing"
             ),
             tab="sources",
         ),

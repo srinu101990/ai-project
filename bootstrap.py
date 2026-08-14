@@ -122,12 +122,23 @@ def main() -> int:
         return 0
 
     env = os.environ.copy()
-    bind_host = "127.0.0.1" if os.name == "nt" else "0.0.0.0"
+    bind_host = os.environ.get("BIND_HOST") or "0.0.0.0"
     env["BIND_HOST"] = bind_host
     env["BIND_PORT"] = str(port)
     env["COLLECTION_MODE"] = env.get("COLLECTION_MODE") or "network"
     env["PYTHONUNBUFFERED"] = "1"
-    log(f"Starting server on {url} ... keep this window open.")
+    lan = "127.0.0.1"
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.settimeout(1)
+        probe.connect(("8.8.8.8", 80))
+        lan = probe.getsockname()[0]
+        probe.close()
+    except OSError:
+        pass
+    log(f"Starting server on {url} (LAN {lan}:{port}) ... keep this window open.")
+    log(f"Second laptop agent: python sentinel_agent.py --server http://{lan}:{port}")
+    log("If Windows Firewall asks, click Allow access.")
     proc = subprocess.Popen(
         [py, "-u", "run.py", "--host", bind_host, "--port", str(port)],
         cwd=str(ROOT / "backend"),

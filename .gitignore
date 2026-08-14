@@ -10,6 +10,11 @@ backend/data/
 frontend/node_modules/
 file_drop/*
 !file_drop/.gitkeep
+agent/agent_seen.json
+agent/inbox_drop/*
+!agent/inbox_drop/.gitkeep
+agent/file_drop/*
+!agent/file_drop/.gitkeep
 .DS_Store
 *.log
 *.log

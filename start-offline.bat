@@ -39,6 +39,8 @@ if not defined LAUNCHER goto :no_python
 echo Using: %LAUNCHER%
 echo First run may take a few minutes while packages install.
 echo Chrome will open by itself AFTER the server is ready.
+echo Second laptop: same Wi-Fi, then run agent\start-agent.bat
+echo If Windows Firewall pops up, click Allow access.
 echo.
 %LAUNCHER% "%~dp0bootstrap.py"
 echo.

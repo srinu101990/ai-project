@@ -60,8 +60,9 @@ export default function LiveSourcesPanel({
       </div>
       <p className="muted source-copy">
         Six collectors inspect different channels at the same time: LAN hosts, endpoint
-        processes, firewall sockets, DNS, email, and login services. Use Projection Burst
-        during a live demo so every source fires together.
+        processes, firewall sockets, DNS, email, and login services. That is the live
+        network scan. Use Sweep All Sources Now during the demo; Projection Burst lights
+        every card at once so you can say the pipeline watches the whole LAN.
       </p>
       <div className="action-bar compact">
         <button className="btn btn-primary" onClick={onSweep} disabled={sweeping || bursting}>

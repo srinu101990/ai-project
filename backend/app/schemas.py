@@ -208,7 +208,12 @@ class RemoteAgentStatus(BaseModel):
     total_seen: int
     agents: list[RemoteAgentOut]
     join_command: Optional[str] = None
+    inject_command: Optional[str] = None
+    inject_all_command: Optional[str] = None
     agent_download: str = "/agent/sentinel_agent.py"
+    agent_launcher: str = "/agent/start-agent.bat"
+    lan_ip: Optional[str] = None
+    lan_url: Optional[str] = None
 
 
 class AgentHeartbeatResponse(BaseModel):

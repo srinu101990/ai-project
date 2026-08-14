@@ -19,7 +19,11 @@ export default function SystemMetaRow({ health, monitor, lastRefresh }) {
       </div>
       <div className="meta-pill">
         <span className="meta-label">Data Source</span>
-        <strong>{source}</strong>
+        <strong>
+          {health?.lan_ip
+            ? `LAN ${health.lan_ip} · ${health?.live_source_count || 6} sources`
+            : source}
+        </strong>
       </div>
       <div className="meta-pill">
         <span className="meta-label">AI Engine</span>

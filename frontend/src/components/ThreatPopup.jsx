@@ -44,7 +44,7 @@ export default function ThreatPopup({ items = [], onDismiss }) {
         </div>
 
         <h3 id="threat-popup-title" className="threat-popup-heading">
-          New Virus / Threat Detected
+          {(item.threat_type || 'threat').replace(/-/g, ' ').toUpperCase()} DETECTED
         </h3>
 
         <div className="threat-popup-title" id="threat-popup-message">

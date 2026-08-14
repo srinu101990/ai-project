@@ -95,7 +95,10 @@ function App() {
         knownThreatIds.current = ids
         return
       }
-      const fresh = (threatData || []).filter((threat) => !knownThreatIds.current.has(threat.id))
+      const fresh = (threatData || []).filter(
+        (threat) =>
+          !knownThreatIds.current.has(threat.id) && threat.threat_type && threat.threat_type !== 'benign',
+      )
       knownThreatIds.current = ids
       if (!fresh.length) return
 
@@ -175,7 +178,7 @@ function App() {
 
   useEffect(() => {
     refresh()
-    const timer = window.setInterval(refresh, 5000)
+    const timer = window.setInterval(refresh, 3000)
     return () => window.clearInterval(timer)
   }, [refresh])
 

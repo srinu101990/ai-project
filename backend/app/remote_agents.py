@@ -94,7 +94,7 @@ def ingest_agent_heartbeat(
     last_type: str | None = None
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
 
-    for raw in findings[:12]:
+    for raw in findings[:40]:
         payload = str(raw.get("raw_payload") or "").strip()
         if len(payload) < 5:
             continue
@@ -105,6 +105,9 @@ def ingest_agent_heartbeat(
         indicator_suffix = ", ".join(str(item) for item in extra if item)
 
         preview = classifier.classify(payload)
+        if preview.threat_type == "benign":
+            last_type = "benign"
+            continue
         duplicate = (
             db.query(ThreatEvent)
             .filter(
@@ -118,20 +121,6 @@ def ingest_agent_heartbeat(
         if duplicate is not None:
             last_type = duplicate.threat_type
             continue
-        if preview.threat_type == "benign":
-            recent_benign = (
-                db.query(ThreatEvent)
-                .filter(
-                    ThreatEvent.source == source,
-                    ThreatEvent.source_ip == ip,
-                    ThreatEvent.threat_type == "benign",
-                    ThreatEvent.created_at >= cutoff,
-                )
-                .first()
-            )
-            if recent_benign is not None:
-                last_type = "benign"
-                continue
 
         event = ingest_event(
             db,
