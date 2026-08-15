@@ -467,7 +467,7 @@ function App() {
             onChecked={(data) => setClassifiedType(data?.threat_type || null)}
             mailStatus={mailStatus}
           />
-          <RemediationPanel threatType={classifiedType} />
+          <RemediationPanel threatType={classifiedType} context="mail" />
         </section>
       ) : null}
 
@@ -537,6 +537,7 @@ function App() {
             onToast={showToast}
             onClassified={(data) => setClassifiedType(data?.threat_type || null)}
           />
+          <RemediationPanel threatType={classifiedType} context="analyzer" />
         </section>
       ) : null}
 

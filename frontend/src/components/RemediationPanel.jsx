@@ -1,14 +1,26 @@
 import { Activity, ClipboardList, ListOrdered, Tag } from 'lucide-react'
 import { remediationFor } from '../utils/remediation'
 
-export default function RemediationPanel({ threatType }) {
+export default function RemediationPanel({ threatType, context = 'analyzer' }) {
   const guide = remediationFor(threatType)
+  const idleCopy =
+    context === 'mail'
+      ? {
+          title: 'Check an email to see rectification steps',
+          detail:
+            'After a mail is classified, this panel shows Detected Type, Behavior, and Precautions.',
+        }
+      : {
+          title: 'Classify a sample to see type, behavior, and precautions',
+          detail:
+            'Paste payload text on the left, then click Classify with AI. Guidance appears as Detected Type → Behavior → Precautions.',
+        }
 
   return (
     <div className="panel section remediation-panel">
       <div className="section-head">
         <h3>Rectification & Precautions</h3>
-        <span>{guide ? 'Auto guidance' : 'Virus evidence reference'}</span>
+        <span>{guide ? 'Auto guidance' : 'Waiting for a classification'}</span>
       </div>
 
       {guide ? (
@@ -57,10 +69,9 @@ export default function RemediationPanel({ threatType }) {
         <div className="remediation-head">
           <ClipboardList size={18} />
           <div>
-            <strong>Check an email to see rectification steps</strong>
+            <strong>{idleCopy.title}</strong>
             <div className="muted" style={{ fontSize: '0.78rem', marginTop: 2 }}>
-              After a mail is classified, this panel shows Detected Type, Behavior, and
-              Precautions. The virus family list is on Threat Intelligence only.
+              {idleCopy.detail}
             </div>
           </div>
         </div>
