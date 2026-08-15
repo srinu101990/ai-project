@@ -24,11 +24,7 @@ import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
 import MailGuardPanel from './components/MailGuardPanel'
-import FileGuardPanel from './components/FileGuardPanel'
-import LaptopMalwarePanel from './components/LaptopMalwarePanel'
-import SetupChecklist from './components/SetupChecklist'
 import LiveSourcesPanel from './components/LiveSourcesPanel'
-import ConnectedPCs from './components/ConnectedPCs'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -55,11 +51,7 @@ function App() {
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
   const [sourceStatus, setSourceStatus] = useState(null)
-  const [agentStatus, setAgentStatus] = useState(null)
   const [mailStatus, setMailStatus] = useState(null)
-  const [fileStatus, setFileStatus] = useState(null)
-  const [endpointStatus, setEndpointStatus] = useState(null)
-  const [setupStatus, setSetupStatus] = useState(null)
   const [sweeping, setSweeping] = useState(false)
   const [bursting, setBursting] = useState(false)
   const [classifiedType, setClassifiedType] = useState(null)
@@ -136,11 +128,7 @@ function App() {
         monitorData,
         demoData,
         sourceData,
-        agentData,
         mailData,
-        fileData,
-        endpointData,
-        setupData,
       ] = await Promise.all([
           api.getStats(),
           api.getThreats({ limit: 40 }),
@@ -149,11 +137,7 @@ function App() {
           api.monitorStatus().catch(() => null),
           api.demoFeedStatus().catch(() => null),
           api.liveSources().catch(() => null),
-          api.remoteAgents().catch(() => null),
           api.mailStatus().catch(() => null),
-          api.fileStatus().catch(() => null),
-          api.endpointStatus().catch(() => null),
-          api.setupStatus().catch(() => null),
         ])
       setStats(statsData)
       setThreats(threatData)
@@ -162,11 +146,7 @@ function App() {
       if (monitorData) setMonitor(monitorData)
       if (demoData) setDemoFeed(demoData)
       if (sourceData) setSourceStatus(sourceData)
-      if (agentData) setAgentStatus(agentData)
       if (mailData) setMailStatus(mailData)
-      if (fileData) setFileStatus(fileData)
-      if (endpointData) setEndpointStatus(endpointData)
-      if (setupData) setSetupStatus(setupData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
     } catch (err) {
@@ -403,7 +383,6 @@ function App() {
 
       {tab === 'dashboard' ? (
         <>
-          <SetupChecklist setup={setupStatus} onGo={setTab} />
           <section className="dashboard-top">
             <LogAnalyzer threat={latestThreat} />
             <ClassificationChart stats={stats || { by_type: {} }} />
@@ -465,13 +444,11 @@ function App() {
             sweeping={sweeping || collecting}
             bursting={bursting}
           />
-          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
         </>
       ) : null}
 
       {tab === 'threats' ? (
         <section className="threats-page">
-          <ThreatDefinitions />
           <div className="panel section page-panel">
             <div className="section-head">
               <h3>Threat Intelligence Feed</h3>
@@ -479,6 +456,7 @@ function App() {
             </div>
             <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
           </div>
+          <ThreatDefinitions />
         </section>
       ) : null}
 
@@ -495,19 +473,61 @@ function App() {
 
       {tab === 'files' ? (
         <section className="page-grid">
-          <div className="sources-stack">
-            <LaptopMalwarePanel
-              onToast={showToast}
-              onChecked={(data) => setClassifiedType(data?.threat_type || null)}
-              endpointStatus={endpointStatus}
-            />
-            <FileGuardPanel
-              onToast={showToast}
-              onChecked={(data) => setClassifiedType(data?.threat_type || null)}
-              fileStatus={fileStatus}
-            />
+          <div className="panel section">
+            <div className="section-head">
+              <h3>Continuous network scan</h3>
+              <span>Entire LAN — not this laptop only</span>
+            </div>
+            <p className="muted source-copy">
+              The dashboard watches the whole subnet in the background: live hosts, risky
+              ports, and the six collectors (Network IDS, Endpoint, Firewall, DNS, Email,
+              Auth) at the same time. New findings are classified by the AI module and
+              appear on Dashboard charts and the Threat Intelligence feed.
+            </p>
+            <div className="action-bar compact">
+              <button
+                className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={handleToggleMonitor}
+                disabled={monitorBusy}
+              >
+                {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                {monitorBusy
+                  ? 'Updating…'
+                  : monitor?.enabled
+                    ? 'Pause network scan'
+                    : 'Resume network scan'}
+              </button>
+              <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
+                <Radar size={16} />
+                {collecting ? 'Scanning network…' : 'Scan network now'}
+              </button>
+              <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
+                <RefreshCw size={16} className={loading ? 'spin' : undefined} />
+                Refresh
+              </button>
+            </div>
+            <div className="source-status mono">
+              <div>
+                Status:{' '}
+                <strong>
+                  {monitor?.scanning || sourceStatus?.sweeping
+                    ? 'Scanning network…'
+                    : monitor?.enabled
+                      ? 'Monitoring entire network'
+                      : 'Paused'}
+                </strong>
+              </div>
+              <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
+              <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
+              <div>
+                Live sources: {sourceStatus?.live_source_count ?? 0}/
+                {sourceStatus?.source_count ?? 6}
+              </div>
+              <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
+              <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
+              <div>Last message: {sourceStatus?.last_message || monitor?.last_message || '—'}</div>
+            </div>
           </div>
-          <RemediationPanel threatType={classifiedType} />
         </section>
       ) : null}
 
@@ -517,7 +537,6 @@ function App() {
             onToast={showToast}
             onClassified={(data) => setClassifiedType(data?.threat_type || null)}
           />
-          <RemediationPanel threatType={classifiedType} />
         </section>
       ) : null}
 
@@ -553,74 +572,8 @@ function App() {
 
       {tab === 'sources' ? (
         <section className="page-grid sources-page">
-          <div className="sources-stack">
-            <LiveSourcesPanel
-              sourceStatus={sourceStatus}
-              onSweep={handleSweepSources}
-              onBurst={handleProjectionBurst}
-              sweeping={sweeping || collecting}
-              bursting={bursting}
-            />
-            <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
-            <div className="panel section">
-              <div className="section-head">
-                <h3>Network Collection</h3>
-                <span>Continuous LAN monitoring</span>
-              </div>
-              <p className="muted source-copy">
-                Live host/port/connection scanning runs in the background together with endpoint,
-                firewall, DNS, email, and auth sensors. Pause anytime, or force an immediate
-                multi-source sweep.
-              </p>
-              <div className="action-bar compact">
-                <button
-                  className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
-                  onClick={handleToggleMonitor}
-                  disabled={monitorBusy}
-                >
-                  {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
-                  {monitorBusy
-                    ? 'Updating…'
-                    : monitor?.enabled
-                      ? 'Pause Monitoring'
-                      : 'Resume Monitoring'}
-                </button>
-                <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
-                  <Radar size={16} />
-                  {collecting ? 'Scanning now…' : 'Scan Now'}
-                </button>
-                <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
-                  <RefreshCw size={16} className={loading ? 'spin' : undefined} />
-                  Refresh
-                </button>
-              </div>
-              <div className="source-status mono">
-                <div>
-                  Status:{' '}
-                  <strong>
-                    {monitor?.scanning || sourceStatus?.sweeping
-                      ? 'Scanning…'
-                      : monitor?.enabled
-                        ? 'Monitoring'
-                        : 'Paused'}
-                  </strong>
-                </div>
-                <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
-                <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
-                <div>
-                  Live sources: {sourceStatus?.live_source_count ?? 0}/
-                  {sourceStatus?.source_count ?? 6}
-                </div>
-                <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
-                <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
-                <div>Last message: {sourceStatus?.last_message || monitor?.last_message || '—'}</div>
-              </div>
-            </div>
-          </div>
-          <div className="sources-stack">
-            <SourceChart stats={stats || { by_source: {} }} />
-            <IngestPanel onIngested={refresh} onToast={showToast} />
-          </div>
+          <SourceChart stats={stats || { by_source: {} }} />
+          <IngestPanel onIngested={refresh} onToast={showToast} />
         </section>
       ) : null}
 

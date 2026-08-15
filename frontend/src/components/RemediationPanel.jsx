@@ -1,5 +1,5 @@
 import { Activity, ClipboardList, ListOrdered, Tag } from 'lucide-react'
-import { remediationFor, VIRUS_EVIDENCE_CATALOG } from '../utils/remediation'
+import { remediationFor } from '../utils/remediation'
 
 export default function RemediationPanel({ threatType }) {
   const guide = remediationFor(threatType)
@@ -54,46 +54,16 @@ export default function RemediationPanel({ threatType }) {
           </section>
         </div>
       ) : (
-        <>
-          <div className="remediation-head">
-            <ClipboardList size={18} />
-            <div>
-              <strong>Classify a sample to unlock guided response steps</strong>
-              <div className="muted" style={{ fontSize: '0.78rem', marginTop: 2 }}>
-                Paste payload text on the left, then click Classify with AI. Guidance appears as:
-                Detected Type → Behavior → Precautions.
-              </div>
+        <div className="remediation-head">
+          <ClipboardList size={18} />
+          <div>
+            <strong>Check an email to see rectification steps</strong>
+            <div className="muted" style={{ fontSize: '0.78rem', marginTop: 2 }}>
+              After a mail is classified, this panel shows Detected Type, Behavior, and
+              Precautions. The virus family list is on Threat Intelligence only.
             </div>
           </div>
-          <p className="muted remediation-intro">
-            Updated virus catalog — record the family/detection evidence shown below:
-          </p>
-          <div className="evidence-table-wrap">
-            <table className="evidence-table">
-              <thead>
-                <tr>
-                  <th>Virus / malware type</th>
-                  <th>Evidence to record</th>
-                </tr>
-              </thead>
-              <tbody>
-                {VIRUS_EVIDENCE_CATALOG.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <span className={`badge ${item.id}`}>{item.title}</span>
-                    </td>
-                    <td>
-                      <div>{item.evidence}</div>
-                      {item.examples ? (
-                        <div className="mono muted evidence-examples">{item.examples}</div>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        </div>
       )}
     </div>
   )
