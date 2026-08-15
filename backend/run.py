@@ -48,7 +48,8 @@ if __name__ == "__main__":
         help="Enable auto-reload (dev only)",
     )
     args = parser.parse_args()
-    _open_browser_when_ready(args.port)
+    if os.getenv("SENTINEL_OPEN_BROWSER", "1").strip().lower() not in {"0", "false", "no", "off"}:
+        _open_browser_when_ready(args.port)
 
     uvicorn.run(
         "app.main:app",

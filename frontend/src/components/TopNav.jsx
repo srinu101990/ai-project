@@ -3,11 +3,11 @@ import NotificationBell from './NotificationBell'
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'threats', label: 'Threat Intelligence' },
-  { id: 'mail', label: 'My Mail' },
-  { id: 'files', label: 'Network Scan' },
   { id: 'analyzer', label: 'AI Analyzer' },
   { id: 'reports', label: 'Reports' },
   { id: 'sources', label: 'Sources' },
+  { id: 'mail', label: 'My Mail' },
+  { id: 'files', label: 'Network Scan' },
 ]
 
 export default function TopNav({

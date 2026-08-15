@@ -127,6 +127,9 @@ def main() -> int:
     env["BIND_PORT"] = str(port)
     env["COLLECTION_MODE"] = env.get("COLLECTION_MODE") or "network"
     env["PYTHONUNBUFFERED"] = "1"
+    # bootstrap.py already opens the dashboard once. Without this, run.py
+    # also opens a second Chrome/Edge tab.
+    env["SENTINEL_OPEN_BROWSER"] = "0"
     lan = "127.0.0.1"
     try:
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
