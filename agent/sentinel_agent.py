@@ -637,7 +637,12 @@ def main() -> int:
     ip = local_ip()
     print(f"CYBER_SENTINEL agent on {hostname} ({ip})")
     print(f"Reporting to {url}")
-    print("Same Wi-Fi is not enough if this IP range does not match the dashboard LAN IP.")
+    if ip.startswith("192.168.137."):
+        print("WARNING: 192.168.137.x means THIS laptop is hosting a Windows Mobile Hotspot.")
+        print("It is not joined to the phone Wi-Fi. Turn Mobile hotspot OFF on this PC,")
+        print("then connect Wi-Fi to the same hotspot name as the main laptop.")
+        print("ipconfig on both PCs must show the same first three numbers, e.g. 10.87.54")
+    print("Same Wi-Fi name is not enough if the IPv4 ranges do not match.")
 
     if args.inject:
         finding = inject_finding(args.inject, hostname, ip)

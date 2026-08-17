@@ -8,7 +8,8 @@ echo ============================================================
 echo  CYBER_SENTINEL.AI  —  second laptop agent
 echo  Same Wi-Fi as the main laptop. Python 3 is required here.
 echo  Do NOT type 127.0.0.1 — that is this laptop, not the dashboard.
-echo  Type the LAN URL from the main dashboard, e.g. http://10.87.54.124:8000
+echo  If ipconfig shows 192.168.137.1, turn OFF Mobile hotspot on this laptop
+echo  and join the phone Wi-Fi instead. Both PCs need the same first 3 numbers.
 echo ============================================================
 echo.
 :ask_url
