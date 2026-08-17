@@ -589,6 +589,16 @@ def collect_live(
             findings.extend(scan_outlook(seen))
         except Exception as exc:  # noqa: BLE001 — Outlook is optional
             print(f"Outlook watch: {exc}")
+    findings.append(
+        _finding(
+            "AGENT",
+            (
+                f"Remote PC agent heartbeat from {hostname} ({ip}). "
+                "This second laptop is connected and sending live watch reports."
+            ),
+            ["remote-agent-heartbeat", hostname],
+        )
+    )
     return findings[:40]
 
 
@@ -692,7 +702,7 @@ def main() -> int:
             accepted = result.get("events_collected", result.get("accepted", "?"))
             print(
                 f"[{time.strftime('%H:%M:%S')}] {len(findings)} finding(s) scanned, "
-                f"dashboard stored {accepted}"
+                f"dashboard stored {accepted} new. Client {hostname} ({ip}) is online."
             )
         except urllib.error.URLError as exc:
             print(f"[{time.strftime('%H:%M:%S')}] cannot reach dashboard: {exc}")

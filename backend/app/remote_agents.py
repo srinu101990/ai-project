@@ -8,7 +8,6 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .classifier import classifier
 from .collector import ingest_event
 from .models import ThreatEvent
 
@@ -104,10 +103,6 @@ def ingest_agent_heartbeat(
             extra = [extra]
         indicator_suffix = ", ".join(str(item) for item in extra if item)
 
-        preview = classifier.classify(payload)
-        if preview.threat_type == "benign":
-            last_type = "benign"
-            continue
         duplicate = (
             db.query(ThreatEvent)
             .filter(
