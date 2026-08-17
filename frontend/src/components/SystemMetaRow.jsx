@@ -19,7 +19,7 @@ export default function SystemMetaRow({ health, monitor, lastRefresh }) {
       </div>
       <div className="meta-pill">
         <span className="meta-label">Data Source</span>
-        <strong>
+        <strong title={(health?.lan_ips || []).join(', ') || undefined}>
           {health?.lan_ip
             ? `LAN ${health.lan_ip} · ${health?.live_source_count || 6} sources`
             : source}

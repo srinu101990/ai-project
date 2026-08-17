@@ -54,6 +54,12 @@ export default function ConnectedPCs({ agentStatus, onToast }) {
           Main laptop LAN URL (allow Windows Firewall): {lanUrl}
         </div>
       ) : null}
+      <p className="muted source-copy">
+        Phone hotspot IPs look like <code>192.168.43.x</code> (Android) or{' '}
+        <code>172.20.10.x</code> (iPhone). If this URL still shows a <code>10.x</code> address,
+        the main laptop is still on the old college/office Wi-Fi. Disconnect that network on
+        both laptops, keep only the hotspot, then restart <code>start-offline.bat</code>.
+      </p>
       <ol className="mail-steps">
         <li>On the second laptop, copy <code>agent/</code> or download the files below.</li>
         <li>

@@ -81,8 +81,19 @@ class ScanReport:
     message: str
 
 
-def _local_ipv4() -> str:
-    """Best-effort local IPv4 used for outbound traffic."""
+# Phone hotspots and Windows hosted networks. Prefer these over a leftover
+# campus/office 10.x address when the laptop is still joined to both.
+_HOTSPOT_PREFIXES = (
+    "172.20.10.",  # iPhone
+    "192.168.43.",  # Android
+    "192.168.137.",  # Windows hotspot
+    "192.168.173.",
+    "192.168.49.",
+)
+
+
+def _route_ipv4() -> str:
+    """IPv4 of the current default route (may still be the old campus Wi-Fi)."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.connect(("8.8.8.8", 80))
@@ -93,6 +104,46 @@ def _local_ipv4() -> str:
             return socket.gethostbyname(hostname)
         except OSError:
             return "127.0.0.1"
+
+
+def list_local_ipv4s() -> list[str]:
+    """All non-loopback IPv4 addresses currently on this PC."""
+    ips: list[str] = []
+    if psutil is not None:
+        for addrs in psutil.net_if_addrs().values():
+            for addr in addrs:
+                if addr.family != socket.AF_INET:
+                    continue
+                ip = addr.address
+                if not ip or ip.startswith("127.") or ip.startswith("169.254."):
+                    continue
+                if ip not in ips:
+                    ips.append(ip)
+    route = _route_ipv4()
+    if route and not route.startswith("127.") and route not in ips:
+        ips.append(route)
+    return ips
+
+
+def preferred_lan_ip() -> str:
+    """IP the second laptop should ping. Hotspot beats leftover campus Wi-Fi."""
+    ips = list_local_ipv4s()
+    for prefix in _HOTSPOT_PREFIXES:
+        for ip in ips:
+            if ip.startswith(prefix):
+                return ip
+    for ip in ips:
+        if ip.startswith("192.168."):
+            return ip
+    route = _route_ipv4()
+    if route and not route.startswith("127."):
+        return route
+    return ips[0] if ips else "127.0.0.1"
+
+
+def _local_ipv4() -> str:
+    """Best-effort LAN IPv4 for dashboard join URLs and subnet scans."""
+    return preferred_lan_ip()
 
 
 def resolve_scan_network() -> tuple[str, ipaddress.IPv4Network]:

@@ -37,7 +37,7 @@ from .outlook_local import autostart_outlook_watch, outlook_installed, outlook_m
 from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
-from .network_scanner import _local_ipv4
+from .network_scanner import _local_ipv4, list_local_ipv4s
 from .remote_agents import agent_registry, ingest_agent_heartbeat
 from .report import build_report_summary, generate_pdf_report, get_stats
 from .schemas import (
@@ -198,6 +198,7 @@ def health():
         "bind_port": BIND_PORT,
         "local_ip": mon.get("last_local_ip"),
         "lan_ip": _safe_lan_ip(),
+        "lan_ips": list_local_ipv4s(),
         "scan_subnet": SCAN_SUBNET or mon.get("last_subnet"),
         "frontend_bundled": FRONTEND_DIST.exists(),
     }
