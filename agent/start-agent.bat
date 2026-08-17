@@ -7,13 +7,26 @@ echo.
 echo ============================================================
 echo  CYBER_SENTINEL.AI  —  second laptop agent
 echo  Same Wi-Fi as the main laptop. Python 3 is required here.
+echo  Do NOT type 127.0.0.1 — that is this laptop, not the dashboard.
+echo  Type the LAN URL from the main dashboard, e.g. http://10.87.54.124:8000
 echo ============================================================
 echo.
-set /p SERVER=Main laptop URL (example http://192.168.1.24:8000): 
-if "%SERVER%"=="" set "SERVER=http://127.0.0.1:8000"
+:ask_url
+set "SERVER="
+set /p SERVER=Main laptop URL: 
+if "%SERVER%"=="" (
+  echo You must type the URL. Example: http://10.87.54.124:8000
+  goto ask_url
+)
+echo %SERVER% | findstr /I "127.0.0.1 localhost" >nul
+if not errorlevel 1 (
+  echo 127.0.0.1 / localhost will not reach the other laptop. Try again.
+  goto ask_url
+)
 
 echo.
-echo Starting live watch. Leave that new window OPEN.
+echo Starting live watch against %SERVER%
+echo Leave that new window OPEN. You should see "sent ... finding(s)".
 echo Then use this menu to inject phishing / malware one by one.
 echo.
 

@@ -624,12 +624,20 @@ def main() -> int:
     )
     args = parser.parse_args()
     server = args.server.rstrip("/")
+    lowered = server.lower()
+    if "127.0.0.1" in lowered or "localhost" in lowered or "[::1]" in lowered:
+        print("ERROR: --server cannot be 127.0.0.1 or localhost.")
+        print("That address is THIS laptop only. On the second laptop use the")
+        print("main laptop LAN IP from the dashboard header, for example:")
+        print("  python sentinel_agent.py --server http://10.87.54.124:8000")
+        return 2
     url = f"{server}/api/agents/heartbeat"
 
     hostname = socket.gethostname()
     ip = local_ip()
     print(f"CYBER_SENTINEL agent on {hostname} ({ip})")
     print(f"Reporting to {url}")
+    print("Same Wi-Fi is not enough if this IP range does not match the dashboard LAN IP.")
 
     if args.inject:
         finding = inject_finding(args.inject, hostname, ip)
