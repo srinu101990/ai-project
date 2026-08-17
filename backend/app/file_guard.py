@@ -91,7 +91,19 @@ SKIP_DIR_NAMES = {
     "venv",
     "__pycache__",
     "appdata",
+    "application data",
+    "local settings",
     "library",
+    "windows",
+    "program files",
+    "program files (x86)",
+    "programdata",
+    "$recycle.bin",
+    "system volume information",
+    "cache",
+    "caches",
+    "temp",
+    "tmp",
 }
 
 MALWARE_TYPES = {
@@ -145,16 +157,12 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 def default_watch_folders() -> list[Path]:
+    """Entire user profile plus the demo drop folder (not only Desktop/Downloads)."""
     home = Path.home()
-    candidates = [
-        DROP_DIR,
-        home / "Downloads",
-        home / "Desktop",
-        home / "Documents",
-        home / "OneDrive" / "Downloads",
-        home / "OneDrive" / "Desktop",
-        home / "OneDrive" / "Documents",
-    ]
+    candidates = [DROP_DIR, home]
+    onedrive = home / "OneDrive"
+    if onedrive.is_dir():
+        candidates.append(onedrive)
     seen: set[str] = set()
     folders: list[Path] = []
     for path in candidates:
@@ -202,27 +210,36 @@ def _iter_watched_files(folders: Iterable[Path]) -> list[Path]:
         if not folder.is_dir():
             continue
         try:
-            entries = list(folder.iterdir())
+            root_resolved = folder.resolve()
         except OSError:
             continue
-        for entry in entries:
-            name = entry.name
-            if name.startswith("."):
-                continue
-            if entry.is_file():
-                found.append(entry)
-                continue
-            if not entry.is_dir() or name.lower() in SKIP_DIR_NAMES:
-                continue
+        for dirpath, dirnames, filenames in os.walk(folder):
+            current = Path(dirpath)
             try:
-                children = list(entry.iterdir())
-            except OSError:
+                depth = len(current.resolve().relative_to(root_resolved).parts)
+            except ValueError:
+                dirnames[:] = []
                 continue
-            for child in children:
-                if child.is_file() and not child.name.startswith("."):
-                    found.append(child)
+            if depth > 8:
+                dirnames[:] = []
+                continue
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name.lower() not in SKIP_DIR_NAMES and not name.startswith(".")
+            ]
+            for name in filenames:
+                if name.startswith("."):
+                    continue
+                found.append(current / name)
+                if len(found) >= 800:
+                    found.sort(
+                        key=lambda item: item.stat().st_mtime if item.exists() else 0,
+                        reverse=True,
+                    )
+                    return found[:800]
     found.sort(key=lambda item: item.stat().st_mtime if item.exists() else 0, reverse=True)
-    return found[:120]
+    return found[:800]
 
 
 @dataclass

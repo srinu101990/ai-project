@@ -295,6 +295,36 @@ def _finding(protocol: str, payload: str, indicators: list[str]) -> dict:
     }
 
 
+SKIP_DIR_NAMES = {
+    ".git",
+    ".svn",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "appdata",
+    "application data",
+    "local settings",
+    "library",
+    "windows",
+    "program files",
+    "program files (x86)",
+    "programdata",
+    "$recycle.bin",
+    "system volume information",
+    "recovery",
+    "cache",
+    "caches",
+    "temp",
+    "tmp",
+    ".cursor",
+    ".vscode",
+}
+
+MAX_SCAN_FILES = 1200
+MAX_SCAN_DEPTH = 8
+
+
 def removable_roots() -> list[Path]:
     """Windows USB / SD card drive letters (not C:)."""
     if os.name != "nt":
@@ -320,28 +350,16 @@ def removable_roots() -> list[Path]:
     return roots
 
 
-def watch_folders() -> list[Path]:
+def watch_roots() -> list[Path]:
+    """User profile (all folders) plus USB sticks and demo drop folders."""
     home = Path.home()
-    candidates = [
-        DROP_MAIL,
-        DROP_FILES,
-        home / "Downloads",
-        home / "Desktop",
-        home / "Documents",
-        home / "OneDrive" / "Downloads",
-        home / "OneDrive" / "Desktop",
-        home / "OneDrive" / "Documents",
-    ]
-    for usb in removable_roots():
-        candidates.append(usb)
-        try:
-            for child in list(usb.iterdir())[:30]:
-                if child.is_dir():
-                    candidates.append(child)
-        except OSError:
-            pass
+    candidates = [DROP_MAIL, DROP_FILES, home]
+    onedrive = home / "OneDrive"
+    if onedrive.is_dir():
+        candidates.append(onedrive)
+    candidates.extend(removable_roots())
     seen: set[str] = set()
-    folders: list[Path] = []
+    roots: list[Path] = []
     for path in candidates:
         try:
             resolved = path.resolve()
@@ -355,69 +373,98 @@ def watch_folders() -> list[Path]:
         if not path.is_dir():
             continue
         seen.add(key)
-        folders.append(path)
-    return folders
+        roots.append(path)
+    return roots
+
+
+def iter_scan_files(roots: list[Path]) -> list[Path]:
+    """Walk every remaining user/USB folder, skipping OS/cache trees."""
+    found: list[Path] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        try:
+            root_resolved = root.resolve()
+        except OSError:
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            current = Path(dirpath)
+            try:
+                depth = len(current.resolve().relative_to(root_resolved).parts)
+            except ValueError:
+                dirnames[:] = []
+                continue
+            if depth > MAX_SCAN_DEPTH:
+                dirnames[:] = []
+                continue
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name.lower() not in SKIP_DIR_NAMES and not name.startswith(".")
+            ]
+            for name in filenames:
+                if name.startswith("."):
+                    continue
+                found.append(current / name)
+                if len(found) >= MAX_SCAN_FILES:
+                    return found
+    return found
 
 
 def scan_files(hostname: str, ip: str, seen: list[str]) -> list[dict]:
     findings: list[dict] = []
-    for folder in watch_folders():
-        try:
-            entries = list(folder.iterdir())[:250]
-        except OSError:
+    for path in iter_scan_files(watch_roots()):
+        if not path.is_file():
             continue
-        for path in entries:
-            if not path.is_file():
+        key = f"file:{path}"
+        if key in seen:
+            continue
+        name = path.name.lower()
+        family = None
+        for pattern, hint in FILE_NAME_HINTS:
+            if re.search(pattern, name, re.I):
+                family = hint
+                break
+        text = ""
+        if path.suffix.lower() in {".eml", ".txt", ".msg", ".html"}:
+            try:
+                raw = path.read_bytes()[:8000]
+            except OSError:
                 continue
-            key = f"file:{path}"
-            if key in seen:
-                continue
-            name = path.name.lower()
-            family = None
-            for pattern, hint in FILE_NAME_HINTS:
-                if re.search(pattern, name, re.I):
-                    family = hint
-                    break
-            text = ""
-            if path.suffix.lower() in {".eml", ".txt", ".msg", ".html"}:
-                try:
-                    raw = path.read_bytes()[:8000]
-                except OSError:
-                    continue
-                if path.suffix.lower() == ".eml":
-                    sender, subject, body = _message_text(email.message_from_bytes(raw))
-                    text = _mail_payload(sender, subject, body)
-                    if not family and any(hint in text.lower() for hint in PHISH_HINTS):
-                        family = "phishing"
-                else:
-                    text = raw.decode(errors="replace")
-                    if not family and any(hint in text.lower() for hint in PHISH_HINTS):
-                        family = "phishing"
-                    if not family:
-                        for pattern, hint in FILE_NAME_HINTS:
-                            if re.search(pattern, text, re.I):
-                                family = hint
-                                break
-            if not family:
-                continue
-            seen.append(key)
-            protocol = "SMTP" if family == "phishing" else "FILE"
-            blob = text or (
-                f"Remote agent on {hostname} ({ip}) found {family} artifact {path.name} "
-                f"in {folder}."
+            if path.suffix.lower() == ".eml":
+                sender, subject, body = _message_text(email.message_from_bytes(raw))
+                text = _mail_payload(sender, subject, body)
+                if not family and any(hint in text.lower() for hint in PHISH_HINTS):
+                    family = "phishing"
+            else:
+                text = raw.decode(errors="replace")
+                if not family and any(hint in text.lower() for hint in PHISH_HINTS):
+                    family = "phishing"
+                if not family:
+                    for pattern, hint in FILE_NAME_HINTS:
+                        if re.search(pattern, text, re.I):
+                            family = hint
+                            break
+        if not family:
+            continue
+        seen.append(key)
+        protocol = "SMTP" if family == "phishing" else "FILE"
+        blob = text or (
+            f"Remote agent on {hostname} ({ip}) found {family} artifact {path.name} "
+            f"in {path.parent}."
+        )
+        if family == "phishing" and "urgent action" not in blob.lower():
+            blob = (
+                f"{blob} Urgent action required: verify your account and click the "
+                "login portal."
             )
-            if family == "phishing" and "urgent action" not in blob.lower():
-                blob = (
-                    f"{blob} Urgent action required: verify your account and click the "
-                    "login portal."
-                )
-            findings.append(
-                _finding(
-                    protocol,
-                    blob,
-                    [f"file:{path.name}", family, "remote-agent", hostname],
-                )
+        findings.append(
+            _finding(
+                protocol,
+                blob,
+                [f"file:{path.name}", family, "remote-agent", hostname],
             )
+        )
     return findings
 
 
@@ -713,12 +760,13 @@ def main() -> int:
     DROP_FILES.mkdir(parents=True, exist_ok=True)
     seen: list[str] = _read_json(SEEN_PATH, [])
     print(f"Live watch every {args.interval}s. Ctrl+C to stop.")
+    print("Scanning all user folders + USB (not only Desktop/Downloads/Documents).")
+    print("Skipping AppData, Windows, and cache folders so the watch stays fast.")
     usb = removable_roots()
     if usb:
         print("USB watch: " + ", ".join(str(path) for path in usb))
     else:
-        print("USB watch: none yet. Plug a USB stick; files named wannacry / virus / ransom are classified.")
-    print(f"Also watching Desktop, Downloads, Documents, and {DROP_FILES}")
+        print("USB watch: none plugged in yet.")
     print(f"Drop a phishing .eml into: {DROP_MAIL}")
     print(f"Sample mail/malware files: {AGENT_DIR / 'demo_samples'}")
     print(f"Or inject from another window: python sentinel_agent.py --server {server} --inject phishing")
