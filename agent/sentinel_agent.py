@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CYBER_SENTINEL agent — run this on the SECOND laptop (demo PC).
 
-It watches that PC's mail drop folder, Downloads/Desktop, processes, and ports,
+It watches that PC's mail drop folder, Downloads/Desktop, USB sticks, processes, and ports,
 then sends findings to the main dashboard for AI classification and live popups.
 
 Usage on the second laptop (same Wi-Fi / LAN as the dashboard):
@@ -24,6 +24,7 @@ No extra packages required (Python 3.9+).
 from __future__ import annotations
 
 import argparse
+import ctypes
 import email
 import imaplib
 import json
@@ -294,6 +295,31 @@ def _finding(protocol: str, payload: str, indicators: list[str]) -> dict:
     }
 
 
+def removable_roots() -> list[Path]:
+    """Windows USB / SD card drive letters (not C:)."""
+    if os.name != "nt":
+        return []
+    try:
+        kernel32 = ctypes.windll.kernel32
+        bitmask = int(kernel32.GetLogicalDrives())
+    except Exception:
+        return []
+    drive_removable = 2
+    roots: list[Path] = []
+    for index in range(26):
+        if not bitmask & (1 << index):
+            continue
+        letter = chr(ord("A") + index)
+        root = Path(f"{letter}:/")
+        try:
+            kind = int(kernel32.GetDriveTypeW(str(root)))
+        except Exception:
+            continue
+        if kind == drive_removable and root.exists():
+            roots.append(root)
+    return roots
+
+
 def watch_folders() -> list[Path]:
     home = Path.home()
     candidates = [
@@ -306,6 +332,14 @@ def watch_folders() -> list[Path]:
         home / "OneDrive" / "Desktop",
         home / "OneDrive" / "Documents",
     ]
+    for usb in removable_roots():
+        candidates.append(usb)
+        try:
+            for child in list(usb.iterdir())[:30]:
+                if child.is_dir():
+                    candidates.append(child)
+        except OSError:
+            pass
     seen: set[str] = set()
     folders: list[Path] = []
     for path in candidates:
@@ -679,6 +713,12 @@ def main() -> int:
     DROP_FILES.mkdir(parents=True, exist_ok=True)
     seen: list[str] = _read_json(SEEN_PATH, [])
     print(f"Live watch every {args.interval}s. Ctrl+C to stop.")
+    usb = removable_roots()
+    if usb:
+        print("USB watch: " + ", ".join(str(path) for path in usb))
+    else:
+        print("USB watch: none yet. Plug a USB stick; files named wannacry / virus / ransom are classified.")
+    print(f"Also watching Desktop, Downloads, Documents, and {DROP_FILES}")
     print(f"Drop a phishing .eml into: {DROP_MAIL}")
     print(f"Sample mail/malware files: {AGENT_DIR / 'demo_samples'}")
     print(f"Or inject from another window: python sentinel_agent.py --server {server} --inject phishing")
