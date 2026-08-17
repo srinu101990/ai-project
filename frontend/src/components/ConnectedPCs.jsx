@@ -55,10 +55,11 @@ export default function ConnectedPCs({ agentStatus, onToast }) {
         </div>
       ) : null}
       <p className="muted source-copy">
-        Phone hotspot IPs look like <code>192.168.43.x</code> (Android) or{' '}
-        <code>172.20.10.x</code> (iPhone). If this URL still shows a <code>10.x</code> address,
-        the main laptop is still on the old college/office Wi-Fi. Disconnect that network on
-        both laptops, keep only the hotspot, then restart <code>start-offline.bat</code>.
+        Use the IPv4 under <strong>Wireless LAN adapter Wi-Fi</strong> only. Ignore
+        VMware <code>192.168.x</code> adapters. Phone hotspot IPs often look like{' '}
+        <code>192.168.43.x</code> (Android) or <code>172.20.10.x</code> (iPhone); some
+        hotspots use <code>10.x</code>. Both laptops must show the same first three
+        numbers.
       </p>
       <ol className="mail-steps">
         <li>On the second laptop, copy <code>agent/</code> or download the files below.</li>
