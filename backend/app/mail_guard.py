@@ -406,18 +406,18 @@ class MailInboxMonitor:
             self._last_message = "Inbox watch stopped"
         return self.status()
 
-    def poll_once(self) -> dict[str, Any]:
+    def poll_once(self, *, force: bool = False) -> dict[str, Any]:
         from .database import SessionLocal
 
         with self._lock:
             host, user, password, mailbox = self._host, self._username, self._password, self._mailbox
-            first_cycle = self._cycles == 0
             self._polling = True
         if not host or not user or not password:
             raise RuntimeError("Inbox watch is not connected")
         db = SessionLocal()
         created = 0
         phishing_hits = 0
+        fetched = 0
         client = None
         try:
             client = _open_imap(host)
@@ -427,15 +427,20 @@ class MailInboxMonitor:
                 raise RuntimeError(f"Cannot open mailbox {mailbox}")
             _typ, data = client.search(None, "UNSEEN")
             ids = list(data[0].split()) if data and data[0] else []
-            if first_cycle:
-                _typ, all_data = client.search(None, "ALL")
-                recent = list(all_data[0].split())[-10:] if all_data and all_data[0] else []
-                ids = ids + [item for item in recent if item not in ids]
-            seen_ids: list[str] = _read_json(SEEN_PATH, [])
-            for msg_id in ids[-15:]:
+            _typ, all_data = client.search(None, "ALL")
+            recent = list(all_data[0].split())[-25:] if all_data and all_data[0] else []
+            merged: list[bytes] = []
+            for item in recent + ids:
+                if item not in merged:
+                    merged.append(item)
+            ids = merged[-25:]
+            seen_ids: list[str] = [] if force else _read_json(SEEN_PATH, [])
+            persisted = _read_json(SEEN_PATH, [])
+            for msg_id in ids:
                 key = f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
-                if key in seen_ids:
+                if not force and key in seen_ids:
                     continue
+                fetched += 1
                 _typ, raw = client.fetch(msg_id, "(BODY.PEEK[])")
                 blob = _imap_fetch_bytes(raw)
                 if not blob:
@@ -450,9 +455,10 @@ class MailInboxMonitor:
                 )
                 if stored.get("phishing"):
                     phishing_hits += 1
-                seen_ids.append(key)
+                if key not in persisted:
+                    persisted.append(key)
                 created += 1
-            _write_json(SEEN_PATH, seen_ids[-800:])
+            _write_json(SEEN_PATH, persisted[-800:])
             try:
                 client.logout()
             except Exception:
@@ -460,11 +466,16 @@ class MailInboxMonitor:
             client = None
             if phishing_hits:
                 message = (
-                    f"PHISHING DETECTED in {phishing_hits} new mail(s) for {user}. "
-                    f"Checked {created} new message(s) from {host}."
+                    f"PHISHING DETECTED in {phishing_hits} mail(s) for {user}. "
+                    f"Read {fetched} inbox message(s), stored {created}."
+                )
+            elif fetched:
+                message = (
+                    f"Inbox {user}: read {fetched} message(s), stored {created}, "
+                    f"no phishing this cycle"
                 )
             else:
-                message = f"Inbox {user}: {created} new message(s) checked, no phishing this cycle"
+                message = f"Inbox {user}: 0 messages in INBOX (check IMAP is on and this is the right mailbox)"
             with self._lock:
                 self._cycles += 1
                 self._last_events = created

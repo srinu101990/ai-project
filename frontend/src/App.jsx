@@ -22,6 +22,7 @@ import TopNav from './components/TopNav'
 import SystemMetaRow from './components/SystemMetaRow'
 import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
+import ThreatDetailModal from './components/ThreatDetailModal'
 import ThreatDefinitions from './components/ThreatDefinitions'
 import MailGuardPanel from './components/MailGuardPanel'
 import LiveSourcesPanel from './components/LiveSourcesPanel'
@@ -62,6 +63,7 @@ function App() {
   const [notifications, setNotifications] = useState([])
   const [bellOpen, setBellOpen] = useState(false)
   const [threatPopups, setThreatPopups] = useState([])
+  const [detailThreat, setDetailThreat] = useState(null)
   const knownThreatIds = useRef(null)
   const now = useClock()
 
@@ -471,7 +473,11 @@ function App() {
               <h3>Threat Intelligence Feed</h3>
               <span>Live classified network events</span>
             </div>
-            <ThreatTable threats={orderedThreats} onStatusChange={handleStatusChange} />
+            <ThreatTable
+              threats={orderedThreats}
+              onStatusChange={handleStatusChange}
+              onOpen={setDetailThreat}
+            />
           </div>
           <ThreatDefinitions />
         </section>
@@ -597,6 +603,7 @@ function App() {
       ) : null}
 
       <ThreatPopup items={threatPopups} onDismiss={dismissThreatPopup} />
+      <ThreatDetailModal threat={detailThreat} onClose={() => setDetailThreat(null)} />
       {toast ? <div className="toast">{toast}</div> : null}
     </div>
   )

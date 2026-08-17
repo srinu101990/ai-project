@@ -21,6 +21,9 @@ MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier
 PHISHING_PATTERNS = [
     (r"verify\s+(your\s+)?account", "verify account"),
     (r"urgent\s+action\s+required", "urgent action required"),
+    (r"action\s+required", "action required"),
+    (r"fake\s+invoice", "fake invoice scam"),
+    (r"invoice\s+scam", "invoice scam"),
     (r"click\s+(here|below|the\s+link)", "click-through lure"),
     (r"password\s+(reset|expire|expired)", "password reset lure"),
     (r"login\s+(portal|page|now)", "login portal lure"),

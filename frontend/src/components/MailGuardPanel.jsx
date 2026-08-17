@@ -116,7 +116,12 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
     try {
       const status = await api.pollMailImap()
       setImapStatus(status)
-      onToast?.(status.message || status.last_message || 'Inbox checked')
+      if (status.last_phishing) {
+        onChecked?.({ threat_type: 'phishing' })
+        onToast?.(`PHISHING DETECTED in ${status.last_phishing} mail(s)`)
+      } else {
+        onToast?.(status.message || status.last_message || 'Inbox checked')
+      }
     } catch (err) {
       onToast?.(err.message || 'Inbox poll failed')
     } finally {

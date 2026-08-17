@@ -410,7 +410,7 @@ def mail_imap_poll():
         if outlook_monitor.status().get("enabled"):
             status = outlook_monitor.poll_once()
             return {**status, "channel": "outlook", "outlook_installed": True}
-        status = mail_monitor.poll_once()
+        status = mail_monitor.poll_once(force=True)
         return {**status, "channel": "imap", "outlook_installed": outlook_installed()}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
