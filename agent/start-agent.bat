@@ -26,12 +26,26 @@ if not errorlevel 1 (
 )
 
 echo.
+set "PY="
+py -3 -c "import sys; raise SystemExit(0 if sys.version_info>=(3,9) else 1)" 2>nul
+if not errorlevel 1 set "PY=py -3"
+if not defined PY (
+  python -c "import sys; raise SystemExit(0 if sys.version_info>=(3,9) else 1)" 2>nul
+  if not errorlevel 1 set "PY=python"
+)
+if not defined PY (
+  echo ERROR: Python was not found on this laptop.
+  echo Install Python 3.12 from python.org and tick Add python.exe to PATH.
+  pause
+  exit /b 1
+)
+echo Using: %PY%
 echo Starting live watch against %SERVER%
-echo Leave that new window OPEN. You should see "sent ... finding(s)".
+echo Leave that new window OPEN. You should see "Starting CYBER_SENTINEL agent..."
 echo Then use this menu to inject phishing / malware one by one.
 echo.
 
-start "CYBER_SENTINEL watch" cmd /k python "%~dp0sentinel_agent.py" --server %SERVER%
+start "CYBER_SENTINEL watch" cmd /k %PY% -u "%~dp0sentinel_agent.py" --server %SERVER%
 
 :menu
 echo.
@@ -54,21 +68,21 @@ echo  [A] Inject ALL types one by one (8 seconds apart)
 echo  [Q] Quit
 echo.
 set /p CHOICE=Choice: 
-if /I "%CHOICE%"=="1" python "%~dp0sentinel_agent.py" --server %SERVER% --inject phishing
-if /I "%CHOICE%"=="2" python "%~dp0sentinel_agent.py" --server %SERVER% --inject virus
-if /I "%CHOICE%"=="3" python "%~dp0sentinel_agent.py" --server %SERVER% --inject worm
-if /I "%CHOICE%"=="4" python "%~dp0sentinel_agent.py" --server %SERVER% --inject trojan
-if /I "%CHOICE%"=="5" python "%~dp0sentinel_agent.py" --server %SERVER% --inject ransomware
-if /I "%CHOICE%"=="6" python "%~dp0sentinel_agent.py" --server %SERVER% --inject spyware
-if /I "%CHOICE%"=="7" python "%~dp0sentinel_agent.py" --server %SERVER% --inject adware
-if /I "%CHOICE%"=="8" python "%~dp0sentinel_agent.py" --server %SERVER% --inject rootkit
-if /I "%CHOICE%"=="9" python "%~dp0sentinel_agent.py" --server %SERVER% --inject botnet
-if /I "%CHOICE%"=="K" python "%~dp0sentinel_agent.py" --server %SERVER% --inject keylogger
-if /I "%CHOICE%"=="R" python "%~dp0sentinel_agent.py" --server %SERVER% --inject rat
-if /I "%CHOICE%"=="D" python "%~dp0sentinel_agent.py" --server %SERVER% --inject downloader
-if /I "%CHOICE%"=="B" python "%~dp0sentinel_agent.py" --server %SERVER% --inject backdoor
-if /I "%CHOICE%"=="F" python "%~dp0sentinel_agent.py" --server %SERVER% --inject fileless
-if /I "%CHOICE%"=="M" python "%~dp0sentinel_agent.py" --server %SERVER% --inject cryptominer
-if /I "%CHOICE%"=="A" python "%~dp0sentinel_agent.py" --server %SERVER% --inject-all --delay 8
+if /I "%CHOICE%"=="1" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject phishing
+if /I "%CHOICE%"=="2" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject virus
+if /I "%CHOICE%"=="3" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject worm
+if /I "%CHOICE%"=="4" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject trojan
+if /I "%CHOICE%"=="5" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject ransomware
+if /I "%CHOICE%"=="6" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject spyware
+if /I "%CHOICE%"=="7" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject adware
+if /I "%CHOICE%"=="8" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject rootkit
+if /I "%CHOICE%"=="9" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject botnet
+if /I "%CHOICE%"=="K" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject keylogger
+if /I "%CHOICE%"=="R" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject rat
+if /I "%CHOICE%"=="D" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject downloader
+if /I "%CHOICE%"=="B" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject backdoor
+if /I "%CHOICE%"=="F" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject fileless
+if /I "%CHOICE%"=="M" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject cryptominer
+if /I "%CHOICE%"=="A" %PY% -u "%~dp0sentinel_agent.py" --server %SERVER% --inject-all --delay 8
 if /I "%CHOICE%"=="Q" goto :eof
 goto menu

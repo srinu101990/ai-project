@@ -25,6 +25,7 @@ import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
 import MailGuardPanel from './components/MailGuardPanel'
 import LiveSourcesPanel from './components/LiveSourcesPanel'
+import ConnectedPCs from './components/ConnectedPCs'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -51,6 +52,7 @@ function App() {
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
   const [sourceStatus, setSourceStatus] = useState(null)
+  const [agentStatus, setAgentStatus] = useState(null)
   const [mailStatus, setMailStatus] = useState(null)
   const [sweeping, setSweeping] = useState(false)
   const [bursting, setBursting] = useState(false)
@@ -128,6 +130,7 @@ function App() {
         monitorData,
         demoData,
         sourceData,
+        agentData,
         mailData,
       ] = await Promise.all([
           api.getStats(),
@@ -137,6 +140,7 @@ function App() {
           api.monitorStatus().catch(() => null),
           api.demoFeedStatus().catch(() => null),
           api.liveSources().catch(() => null),
+          api.remoteAgents().catch(() => null),
           api.mailStatus().catch(() => null),
         ])
       setStats(statsData)
@@ -146,6 +150,7 @@ function App() {
       if (monitorData) setMonitor(monitorData)
       if (demoData) setDemoFeed(demoData)
       if (sourceData) setSourceStatus(sourceData)
+      if (agentData) setAgentStatus(agentData)
       if (mailData) setMailStatus(mailData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
@@ -444,6 +449,7 @@ function App() {
             sweeping={sweeping || collecting}
             bursting={bursting}
           />
+          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
         </>
       ) : null}
 
@@ -575,6 +581,7 @@ function App() {
         <section className="page-grid sources-page">
           <SourceChart stats={stats || { by_source: {} }} />
           <IngestPanel onIngested={refresh} onToast={showToast} />
+          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
         </section>
       ) : null}
 

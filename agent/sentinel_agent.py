@@ -593,6 +593,7 @@ def collect_live(
 
 
 def main() -> int:
+    print("Starting CYBER_SENTINEL agent...", flush=True)
     parser = argparse.ArgumentParser(description="CYBER_SENTINEL remote PC agent")
     parser.add_argument(
         "--server",
