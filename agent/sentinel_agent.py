@@ -659,8 +659,9 @@ def main() -> int:
         finding = inject_finding(args.inject, hostname, ip)
         result = send_report(url, hostname, ip, [finding])
         print(f"Injected {args.inject}. Dashboard stored {result.get('events_collected', '?')} event(s).")
-        print("Watch the main laptop for the popup, charts, and threat feed.")
-        return 0
+        print("Watch the main laptop for the popup.")
+        print("Keeping live watch ON so the dashboard can show this PC as LIVE.")
+        print("Leave this window open. Ctrl+C to stop.")
 
     if args.inject_all:
         kinds = list(INJECT_CATALOG)

@@ -26,6 +26,7 @@ import ThreatDefinitions from './components/ThreatDefinitions'
 import MailGuardPanel from './components/MailGuardPanel'
 import LiveSourcesPanel from './components/LiveSourcesPanel'
 import ConnectedPCs from './components/ConnectedPCs'
+import ClientBanner from './components/ClientBanner'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -316,7 +317,16 @@ function App() {
     ? `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
     : '—'
   const dominant = summary?.top_threat_type || '—'
-  const latestThreat = threats[0] || null
+  const latestRemote = (threats || []).find((item) =>
+    String(item.source || '').toLowerCase().includes('remote agent'),
+  )
+  const latestThreat = latestRemote || threats[0] || null
+  const orderedThreats = [...(threats || [])].sort((left, right) => {
+    const leftRemote = String(left.source || '').toLowerCase().includes('remote agent') ? 0 : 1
+    const rightRemote = String(right.source || '').toLowerCase().includes('remote agent') ? 0 : 1
+    if (leftRemote !== rightRemote) return leftRemote - rightRemote
+    return (right.id || 0) - (left.id || 0)
+  })
 
   const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const dateLabel = now
@@ -385,6 +395,7 @@ function App() {
         onDemoToggle={handleToggleDemoFeed}
       />
       <SystemMetaRow health={health} monitor={monitor} lastRefresh={lastRefresh} />
+      <ClientBanner agentStatus={agentStatus} />
 
       {tab === 'dashboard' ? (
         <>
@@ -442,6 +453,7 @@ function App() {
             </article>
           </section>
 
+          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
           <LiveSourcesPanel
             sourceStatus={sourceStatus}
             onSweep={handleSweepSources}
@@ -449,7 +461,6 @@ function App() {
             sweeping={sweeping || collecting}
             bursting={bursting}
           />
-          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
         </>
       ) : null}
 
@@ -460,7 +471,7 @@ function App() {
               <h3>Threat Intelligence Feed</h3>
               <span>Live classified network events</span>
             </div>
-            <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
+            <ThreatTable threats={orderedThreats} onStatusChange={handleStatusChange} />
           </div>
           <ThreatDefinitions />
         </section>
