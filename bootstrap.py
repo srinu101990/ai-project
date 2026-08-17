@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -39,9 +41,100 @@ def is_store_stub(path: str) -> bool:
     return "windowsapps" in normalized
 
 
-def run(cmd: list[str]) -> None:
+def run(cmd: list[str], *, allow_fail: bool = False) -> int:
     log("> " + " ".join(cmd))
-    subprocess.check_call(cmd)
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    if proc.stdout:
+        for line in proc.stdout:
+            log(line.rstrip())
+    code = int(proc.wait())
+    if code and not allow_fail:
+        raise subprocess.CalledProcessError(code, cmd)
+    return code
+
+
+def _rmtree(path: Path) -> None:
+    def _onerror(func, item, _exc) -> None:
+        try:
+            os.chmod(item, stat.S_IWRITE)
+            func(item)
+        except OSError:
+            pass
+
+    if path.exists():
+        shutil.rmtree(path, onerror=_onerror)
+
+
+def venv_home() -> Path | None:
+    cfg = VENV / "pyvenv.cfg"
+    if not cfg.is_file():
+        return None
+    for line in cfg.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.lower().startswith("home"):
+            return Path(line.split("=", 1)[-1].strip().strip('"'))
+    return None
+
+
+def venv_is_usable() -> bool:
+    """A venv copied from another PC still has files, but pip/python are broken."""
+    py = venv_python()
+    if not py.is_file():
+        return False
+    home = venv_home()
+    if home is not None and not home.exists():
+        log(f"Copied venv points at missing Python: {home}")
+        return False
+    try:
+        probe = subprocess.run(
+            [str(py), "-c", "import sys; print(sys.executable)"],
+            capture_output=True,
+            text=True,
+            timeout=25,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log(f"Copied/broken venv cannot start Python: {exc}")
+        return False
+    if probe.returncode != 0:
+        detail = (probe.stdout or probe.stderr or "").strip()
+        log(f"Copied/broken venv failed a Python probe (exit {probe.returncode}). {detail}")
+        return False
+    pip_probe = subprocess.run(
+        [str(py), "-m", "pip", "--version"],
+        capture_output=True,
+        text=True,
+        timeout=25,
+    )
+    if pip_probe.returncode != 0:
+        log("This laptop's venv has Python but pip is broken (common after copying the folder).")
+        return False
+    return True
+
+
+def ensure_venv() -> str:
+    if venv_is_usable():
+        return str(venv_python())
+    if VENV.exists():
+        log("Removing copied/broken backend\\.venv so this laptop can create its own...")
+        try:
+            _rmtree(VENV)
+        except OSError as exc:
+            log(f"ERROR: could not delete backend\\.venv ({exc})")
+            log("Close any other CYBER_SENTINEL black window, then delete the folder")
+            log(str(VENV))
+            log("and run start-offline.bat again.")
+            raise
+    log("Creating virtual environment (this laptop, first run)...")
+    run([sys.executable, "-m", "venv", str(VENV)])
+    py = str(venv_python())
+    if not Path(py).is_file():
+        raise RuntimeError(f"venv was created but {py} is missing")
+    return py
 
 
 def health_ok(port: int, timeout: float = 1.0) -> bool:
@@ -103,13 +196,10 @@ def main() -> int:
         log("then open the inner folder that contains start-offline.bat AND bootstrap.py")
         return 1
 
-    if not venv_python().exists():
-        log("Creating virtual environment (first run)...")
-        run([sys.executable, "-m", "venv", str(VENV)])
-
-    py = str(venv_python())
-    log("Checking Python packages (first run needs internet)...")
-    run([py, "-m", "pip", "install", "--upgrade", "pip"])
+    py = ensure_venv()
+    log("Checking Python packages (this laptop needs internet for the first install)...")
+    if run([py, "-m", "pip", "install", "--upgrade", "pip"], allow_fail=True) != 0:
+        log("pip upgrade skipped (not fatal). Installing packages next...")
     run([py, "-m", "pip", "install", "-r", str(REQ)])
     run([py, "-c", "import fastapi, uvicorn, psutil, sklearn, reportlab"])
 
@@ -204,7 +294,14 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except subprocess.CalledProcessError as exc:
         log(f"COMMAND FAILED with exit {exc.returncode}")
-        log("If pip failed: use Python 3.11 or 3.12 64-bit from python.org, not the Store.")
+        if exc.returncode == 103:
+            log("Exit 103 means this folder was copied from another laptop and")
+            log("backend\\.venv still belongs to that old PC.")
+            log("Delete the folder backend\\.venv, connect internet, then run")
+            log("start-offline.bat again. Do not copy .venv between computers.")
+        else:
+            log("If pip failed: connect internet, or install Python 3.12 64-bit")
+            log("from python.org (not the Microsoft Store).")
         raise SystemExit(exc.returncode) from exc
     except Exception as exc:  # noqa: BLE001 — last-chance launcher error for the log file
         log(f"LAUNCH FAILED: {exc}")

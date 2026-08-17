@@ -50,6 +50,8 @@ start-offline.bat
 
 If an old failed install left a broken environment, delete `backend\.venv` first, then run the launcher again.
 
+If you **copied this folder from another laptop**, delete `backend\.venv` before the first run on the new PC. That folder belongs to the old machine and causes `pip` exit 103. The second laptop should normally run `agent\start-agent.bat`, not `start-offline.bat`.
+
 Then open:
 
 - **This PC:** http://127.0.0.1:8000
