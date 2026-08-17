@@ -29,7 +29,6 @@ from .file_guard import (
     check_and_store as check_file_and_store,
     create_test_samples,
     file_monitor,
-    mark_seen,
     scan_folders,
 )
 from .mail_guard import autostart_mail_watch, check_and_store, mail_monitor, parse_eml_bytes, scan_drop_folder
@@ -81,9 +80,8 @@ FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 
 def seed_if_empty(db: Session) -> None:
-    count = db.query(ThreatEvent).count()
-    if count == 0:
-        collect_from_network(db, batch_size=14)
+    """Do not pre-load a batch of threats. The live monitor streams them one by one."""
+    return
 
 
 def _boot_background_watchers() -> None:
@@ -496,22 +494,19 @@ def files_scan_drop(db: Session = Depends(get_db)):
 
 @app.post("/api/files/test-sample", response_model=FileTestSampleResponse)
 def files_test_sample(db: Session = Depends(get_db)):
-    """Write harmless ransomware/malware test files, then classify them."""
+    """Write harmless ransomware/malware test files; the live watcher streams them one by one."""
     created = create_test_samples()
-    last = None
-    for path in created:
-        last = check_file_and_store(db, Path(path), origin="test-sample")
-    mark_seen(created)
     if not file_monitor.status().get("enabled"):
         file_monitor.start(interval_seconds=8, persist=True)
     return {
         "created": created,
-        "new_events": len(created),
+        "new_events": 0,
         "message": (
-            f"Wrote {len(created)} test file(s) and classified them. "
+            f"Wrote {len(created)} test file(s). Live folder watch will classify them "
+            "one by one — they will not all appear at once. "
             "Delete the CYBER_SENTINEL_TEST_* and invoice_payment_overdue_*.pdf.exe files after your demo."
         ),
-        "last": last,
+        "last": None,
     }
 
 

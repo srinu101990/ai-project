@@ -38,9 +38,41 @@ function useClock() {
   return now
 }
 
+function buildLiveStats(rows) {
+  const byType = {}
+  const bySeverity = {}
+  const bySource = {}
+  let open = 0
+  let confSum = 0
+  let confN = 0
+  for (const item of rows || []) {
+    const type = item.threat_type || 'unknown'
+    const severity = item.severity || 'low'
+    const source = item.source || 'unknown'
+    byType[type] = (byType[type] || 0) + 1
+    bySeverity[severity] = (bySeverity[severity] || 0) + 1
+    bySource[source] = (bySource[source] || 0) + 1
+    if (item.status === 'open' || item.status === 'investigating') open += 1
+    if (type !== 'benign') {
+      confSum += Number(item.confidence) || 0
+      confN += 1
+    }
+  }
+  const ranked = Object.entries(byType).sort((left, right) => right[1] - left[1])
+  return {
+    total_threats: (rows || []).length,
+    open_threats: open,
+    by_type: byType,
+    by_severity: bySeverity,
+    by_source: bySource,
+    timeline: [],
+    recent_confidence_avg: confN ? confSum / confN : 0,
+    top_threat_type: ranked[0] ? ranked[0][0] : '—',
+  }
+}
+
 function App() {
   const [tab, setTab] = useState('dashboard')
-  const [stats, setStats] = useState(null)
   const [threats, setThreats] = useState([])
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -64,7 +96,9 @@ function App() {
   const [bellOpen, setBellOpen] = useState(false)
   const [threatPopups, setThreatPopups] = useState([])
   const [detailThreat, setDetailThreat] = useState(null)
-  const knownThreatIds = useRef(null)
+  const knownThreatIds = useRef(new Set())
+  const popupQueue = useRef([])
+  const revealQueue = useRef([])
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -77,35 +111,62 @@ function App() {
   }, [])
 
   const pushThreatPopups = useCallback((incoming) => {
-    const stamped = incoming.map((threat, index) => ({
-      ...threat,
-      popupId: `${threat.id}-${Date.now()}-${index}`,
-    }))
-    // Keep newest first; modal shows one at a time until the user closes it.
-    setThreatPopups((prev) => [...stamped, ...prev].slice(0, 8))
+    const chronological = [...incoming].reverse()
+    popupQueue.current = [...popupQueue.current, ...chronological]
   }, [])
 
-  const registerNewDetections = useCallback(
-    (threatData) => {
-      const ids = new Set((threatData || []).map((threat) => threat.id))
-      if (knownThreatIds.current === null) {
-        knownThreatIds.current = ids
-        return
-      }
-      const fresh = (threatData || []).filter(
-        (threat) =>
-          !knownThreatIds.current.has(threat.id) && threat.threat_type && threat.threat_type !== 'benign',
-      )
-      knownThreatIds.current = ids
-      if (!fresh.length) return
+  const enqueueLiveThreats = useCallback((incoming) => {
+    const chronological = [...(incoming || [])].sort(
+      (left, right) => (left.id || 0) - (right.id || 0),
+    )
+    for (const item of chronological) {
+      if (!item?.id || knownThreatIds.current.has(item.id)) continue
+      knownThreatIds.current.add(item.id)
+      if (!item.threat_type || item.threat_type === 'benign') continue
+      revealQueue.current.push(item)
+    }
+  }, [])
 
-      const newestFirst = [...fresh].reverse()
-      setUnreadCount((count) => count + newestFirst.length)
-      setNotifications((prev) => [...newestFirst, ...prev].slice(0, 20))
-      pushThreatPopups(newestFirst)
-    },
-    [pushThreatPopups],
-  )
+  const refresh = useCallback(async () => {
+    try {
+      const [
+        threatData,
+        reportData,
+        healthData,
+        monitorData,
+        demoData,
+        sourceData,
+        agentData,
+        mailData,
+      ] = await Promise.all([
+          api.getThreats({ limit: 40 }),
+          api.reportSummary(),
+          api.health().catch(() => null),
+          api.monitorStatus().catch(() => null),
+          api.demoFeedStatus().catch(() => null),
+          api.liveSources().catch(() => null),
+          api.remoteAgents().catch(() => null),
+          api.mailStatus().catch(() => null),
+        ])
+      setThreats((prev) => {
+        const fresh = new Map((threatData || []).map((item) => [item.id, item]))
+        return prev.map((row) => fresh.get(row.id) || row)
+      })
+      setSummary(reportData)
+      if (healthData) setHealth(healthData)
+      if (monitorData) setMonitor(monitorData)
+      if (demoData) setDemoFeed(demoData)
+      if (sourceData) setSourceStatus(sourceData)
+      if (agentData) setAgentStatus(agentData)
+      if (mailData) setMailStatus(mailData)
+      enqueueLiveThreats(threatData)
+      setLastRefresh(new Date())
+    } catch (err) {
+      showToast(err.message || 'Failed to load dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }, [enqueueLiveThreats, showToast])
 
   const handleBellToggle = useCallback((nextOpen) => {
     setBellOpen(nextOpen)
@@ -123,52 +184,51 @@ function App() {
     setTab('threats')
   }, [])
 
-  const refresh = useCallback(async () => {
-    try {
-      const [
-        statsData,
-        threatData,
-        reportData,
-        healthData,
-        monitorData,
-        demoData,
-        sourceData,
-        agentData,
-        mailData,
-      ] = await Promise.all([
-          api.getStats(),
-          api.getThreats({ limit: 40 }),
-          api.reportSummary(),
-          api.health().catch(() => null),
-          api.monitorStatus().catch(() => null),
-          api.demoFeedStatus().catch(() => null),
-          api.liveSources().catch(() => null),
-          api.remoteAgents().catch(() => null),
-          api.mailStatus().catch(() => null),
-        ])
-      setStats(statsData)
-      setThreats(threatData)
-      setSummary(reportData)
-      if (healthData) setHealth(healthData)
-      if (monitorData) setMonitor(monitorData)
-      if (demoData) setDemoFeed(demoData)
-      if (sourceData) setSourceStatus(sourceData)
-      if (agentData) setAgentStatus(agentData)
-      if (mailData) setMailStatus(mailData)
-      registerNewDetections(threatData)
-      setLastRefresh(new Date())
-    } catch (err) {
-      showToast(err.message || 'Failed to load dashboard data')
-    } finally {
-      setLoading(false)
-    }
-  }, [registerNewDetections, showToast])
-
   useEffect(() => {
     refresh()
     const timer = window.setInterval(refresh, 3000)
     return () => window.clearInterval(timer)
   }, [refresh])
+
+  useEffect(() => {
+    let timeout
+    const tick = () => {
+      const next = revealQueue.current.shift()
+      if (next) {
+        setThreats((prev) => (prev.some((row) => row.id === next.id) ? prev : [next, ...prev]))
+        if (next.threat_type && next.threat_type !== 'benign') {
+          setUnreadCount((count) => count + 1)
+          setNotifications((prev) => [next, ...prev].slice(0, 20))
+          pushThreatPopups([next])
+        }
+        timeout = window.setTimeout(tick, 5500)
+        return
+      }
+      timeout = window.setTimeout(tick, 700)
+    }
+    timeout = window.setTimeout(tick, 800)
+    return () => window.clearTimeout(timeout)
+  }, [pushThreatPopups])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setThreatPopups((prev) => {
+        if (prev.length) return prev
+        const next = popupQueue.current.shift()
+        if (!next) return prev
+        return [{ ...next, popupId: `${next.id}-${Date.now()}` }]
+      })
+    }, 400)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!threatPopups[0]) return undefined
+    const timer = window.setTimeout(() => {
+      dismissThreatPopup(threatPopups[0].popupId)
+    }, 5000)
+    return () => window.clearTimeout(timer)
+  }, [threatPopups, dismissThreatPopup])
 
   useEffect(() => {
     let cancelled = false
@@ -197,7 +257,7 @@ function App() {
   async function handleCollect() {
     setCollecting(true)
     try {
-      const result = await api.collect(18, 'network')
+      const result = await api.collect(1, 'network')
       const detail = [
         result.message || `Collected ${result.events_collected} events`,
         result.live_sources?.length
@@ -311,14 +371,13 @@ function App() {
     }
   }
 
-  const critical = stats?.by_severity?.critical || 0
+  const stats = buildLiveStats(threats)
+  const critical = stats.by_severity.critical || 0
   const containedResolved = (threats || []).filter((t) =>
     ['contained', 'resolved'].includes(t.status),
   ).length
-  const confidencePct = stats
-    ? `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
-    : '—'
-  const dominant = summary?.top_threat_type || '—'
+  const confidencePct = `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
+  const dominant = stats.top_threat_type
   const latestRemote = (threats || []).find((item) =>
     String(item.source || '').toLowerCase().includes('remote agent'),
   )

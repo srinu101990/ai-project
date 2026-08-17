@@ -287,12 +287,15 @@ def _mail_payload(sender: str, subject: str, body: str) -> str:
     )
 
 
-def _finding(protocol: str, payload: str, indicators: list[str]) -> dict:
-    return {
+def _finding(protocol, payload, indicators, key=None):
+    row = {
         "protocol": protocol,
         "raw_payload": payload[:4000],
         "indicators": indicators,
     }
+    if key:
+        row["_key"] = key
+    return row
 
 
 SKIP_DIR_NAMES = {
@@ -447,7 +450,6 @@ def scan_files(hostname: str, ip: str, seen: list[str]) -> list[dict]:
                             break
         if not family:
             continue
-        seen.append(key)
         protocol = "SMTP" if family == "phishing" else "FILE"
         blob = text or (
             f"Remote agent on {hostname} ({ip}) found {family} artifact {path.name} "
@@ -463,6 +465,7 @@ def scan_files(hostname: str, ip: str, seen: list[str]) -> list[dict]:
                 protocol,
                 blob,
                 [f"file:{path.name}", family, "remote-agent", hostname],
+                key=f"file:{path}",
             )
         )
     return findings
@@ -484,6 +487,7 @@ def scan_processes(hostname: str, ip: str) -> list[dict]:
                         f"process(es) on this PC."
                     ),
                     [f"process:{needle}", family, "remote-agent", hostname],
+                    key=f"process:{hostname}:{needle}",
                 )
             )
     for port in listens:
@@ -497,6 +501,7 @@ def scan_processes(hostname: str, ip: str) -> list[dict]:
                         f"port {port}. Live {service} listener is a {family} path on this PC."
                     ),
                     [f"listen:{port}", service.lower(), family, "remote-agent", hostname],
+                    key=f"listen:{hostname}:{port}",
                 )
             )
     return findings
@@ -528,12 +533,12 @@ def scan_imap(username: str, password: str, host: str, seen: list[str]) -> list[
                 continue
             sender, subject, body = _message_text(email.message_from_bytes(blob))
             payload = _mail_payload(sender, subject, body or subject or "(empty message)")
-            seen.append(key)
             findings.append(
                 _finding(
                     "SMTP",
                     payload,
                     ["imap", "remote-agent-mail", username, sender[:80]],
+                    key=key,
                 )
             )
     finally:
@@ -595,7 +600,6 @@ for ($i = 1; $i -le $limit; $i++) {
         key = f"outlook:{msg_id}"
         if key in seen:
             continue
-        seen.append(key)
         findings.append(
             _finding(
                 "SMTP",
@@ -605,6 +609,7 @@ for ($i = 1; $i -le $limit; $i++) {
                     str(item.get("body") or ""),
                 ),
                 ["outlook-local", "remote-agent-mail"],
+                key=key,
             )
         )
     return findings
@@ -638,12 +643,17 @@ def post_json(url: str, payload: dict) -> dict:
 
 
 def send_report(url: str, hostname: str, ip: str, findings: list[dict]) -> dict:
+    cleaned = []
+    for item in findings:
+        row = dict(item)
+        row.pop("_key", None)
+        cleaned.append(row)
     payload = {
         "hostname": hostname,
         "source_ip": ip,
         "os_name": f"{platform.system()} {platform.release()}",
         "username": os.environ.get("USERNAME") or os.environ.get("USER") or "unknown",
-        "findings": findings,
+        "findings": cleaned,
     }
     return post_json(url, payload)
 
@@ -670,17 +680,30 @@ def collect_live(
             findings.extend(scan_outlook(seen))
         except Exception as exc:  # noqa: BLE001 — Outlook is optional
             print(f"Outlook watch: {exc}")
-    findings.append(
-        _finding(
-            "AGENT",
-            (
-                f"Remote PC agent heartbeat from {hostname} ({ip}). "
-                "This second laptop is connected and sending live watch reports."
-            ),
-            ["remote-agent-heartbeat", hostname],
-        )
+    pending = []
+    for item in findings:
+        key = item.get("_key") or ""
+        if key and key in seen:
+            continue
+        pending.append(item)
+    chosen = pending[:1]
+    for item in chosen:
+        key = item.get("_key")
+        if key and key not in seen:
+            seen.append(key)
+    heartbeat = _finding(
+        "AGENT",
+        (
+            f"Remote PC agent heartbeat from {hostname} ({ip}). "
+            "This second laptop is connected and sending live watch reports."
+        ),
+        ["remote-agent-heartbeat", hostname],
+        key=f"heartbeat:{hostname}",
     )
-    return findings[:40]
+    # Keepalive is not a malware row; only send it when this cycle has no new hit.
+    if chosen:
+        return chosen
+    return [heartbeat]
 
 
 def main() -> int:

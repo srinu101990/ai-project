@@ -215,6 +215,7 @@ class OutlookInboxMonitor:
                     phishing_hits += 1
                 seen.append(key)
                 created += 1
+                break
             _write_json(SEEN_PATH, seen[-800:])
             account = payload.get("account") or "Outlook"
             if phishing_hits:
@@ -243,6 +244,8 @@ class OutlookInboxMonitor:
                 self._polling = False
 
     def _loop(self) -> None:
+        if self._stop.wait(5.0):
+            return
         while not self._stop.is_set():
             try:
                 self.poll_once()

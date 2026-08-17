@@ -82,8 +82,8 @@ for an immediate extra pass.
 | `BIND_PORT` | `8000` | HTTP port |
 | `ALLOW_SIMULATED_FALLBACK` | `false` | If a live scan finds nothing, optionally seed demo events |
 | `MONITOR_AUTO_START` | `true` | Begin continuous LAN monitoring on startup |
-| `MONITOR_INTERVAL_SECONDS` | `45` | Seconds between automatic scans |
-| `MONITOR_BATCH_SIZE` | `12` | Max findings stored per monitor cycle |
+| `MONITOR_INTERVAL_SECONDS` | `12` | Seconds between automatic scans (one finding per cycle) |
+| `MONITOR_BATCH_SIZE` | `1` | Max findings stored per monitor cycle (keep at 1 for live feed) |
 | `FILE_WATCH_AUTO_START` | `true` | Watch Downloads/Desktop/Documents on startup |
 | `FILE_WATCH_INTERVAL` | `8` | Seconds between folder scans |
 

@@ -93,7 +93,19 @@ def ingest_agent_heartbeat(
     last_type: str | None = None
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
 
-    for raw in findings[:40]:
+    ranked = sorted(
+        findings[:40],
+        key=lambda raw: (
+            0
+            if "remote-agent-heartbeat" not in " ".join(
+                str(item) for item in (raw.get("indicators") or [])
+            )
+            and "heartbeat" not in str(raw.get("raw_payload") or "").lower()
+            else 1
+        ),
+    )
+
+    for raw in ranked:
         payload = str(raw.get("raw_payload") or "").strip()
         if len(payload) < 5:
             continue
@@ -135,6 +147,7 @@ def ingest_agent_heartbeat(
             db.refresh(event)
         last_type = event.threat_type
         created.append(event)
+        break
 
     agent_registry.record(
         hostname=host,

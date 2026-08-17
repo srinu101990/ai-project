@@ -45,7 +45,7 @@ class ClassifyResponse(BaseModel):
 
 
 class CollectRequest(BaseModel):
-    batch_size: int = Field(default=8, ge=1, le=50)
+    batch_size: int = Field(default=1, ge=1, le=50)
     mode: Optional[str] = Field(
         default=None,
         description="Collection mode override: 'network' (live LAN scan) or 'simulated'.",

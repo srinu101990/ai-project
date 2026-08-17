@@ -408,12 +408,20 @@ def mark_seen(paths: Iterable[Path | str]) -> None:
     _write_json(SEEN_PATH, seen[-1200:])
 
 
-def scan_folders(db: Session, folders: Iterable[Path] | None = None, *, store_safe: bool = False) -> dict[str, Any]:
+def scan_folders(
+    db: Session,
+    folders: Iterable[Path] | None = None,
+    *,
+    store_safe: bool = False,
+    max_store: int = 1,
+) -> dict[str, Any]:
     folders = list(folders) if folders is not None else default_watch_folders()
     seen: list[str] = _read_json(SEEN_PATH, [])
     created = 0
     skipped = 0
+    waiting = 0
     last_verdict = None
+    limit = max(1, int(max_store))
     for path in _iter_watched_files(folders):
         key = _file_key(path)
         if key in seen:
@@ -423,21 +431,31 @@ def scan_folders(db: Session, folders: Iterable[Path] | None = None, *, store_sa
             verdict = evaluate_path(path)
         except OSError:
             continue
-        seen.append(key)
-        if verdict.malicious or store_safe:
-            last_verdict = check_and_store(db, path, origin=f"watch:{path.parent.name}")
-            created += 1
-        else:
+        if not verdict.malicious and not store_safe:
+            seen.append(key)
             skipped += 1
+            continue
+        if created >= limit:
+            waiting += 1
+            continue
+        seen.append(key)
+        last_verdict = check_and_store(db, path, origin=f"watch:{path.parent.name}")
+        created += 1
     _write_json(SEEN_PATH, seen[-1200:])
+    if waiting:
+        message = (
+            f"Folder watch: 1 threat file live now, {waiting} more will appear one by one"
+        )
+    else:
+        message = f"Folder watch: {created} threat file(s), {skipped} already seen or safe"
     return {
-        "scanned": created + skipped,
+        "scanned": created + skipped + waiting,
         "new_events": created,
         "skipped": skipped,
         "folders": [str(item) for item in folders],
         "drop_dir": str(DROP_DIR),
         "last": last_verdict,
-        "message": f"Folder watch: {created} threat file(s), {skipped} already seen or safe",
+        "message": message,
     }
 
 
@@ -561,6 +579,9 @@ class FileFolderMonitor:
                 self._scanning = False
 
     def _loop(self) -> None:
+        # Let the dashboard open empty, then stream one file finding at a time.
+        if self._stop.wait(6.0):
+            return
         while not self._stop.is_set():
             try:
                 self.scan_once()

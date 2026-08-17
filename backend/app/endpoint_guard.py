@@ -459,15 +459,20 @@ def store_finding(db: Session, finding: EndpointFinding) -> Any:
     return event
 
 
-def scan_and_store(db: Session) -> dict[str, Any]:
+def scan_and_store(db: Session, *, max_store: int = 1) -> dict[str, Any]:
     seen: list[str] = _read_json(SEEN_PATH, [])
     created = 0
+    waiting = 0
     last = None
     hits_by_family: dict[str, int] = {}
     findings = collect_laptop_findings()
+    limit = max(1, int(max_store))
     for finding in findings:
         hits_by_family[finding.threat_type] = hits_by_family.get(finding.threat_type, 0) + 1
         if finding.key in seen:
+            continue
+        if created >= limit:
+            waiting += 1
             continue
         last = store_finding(db, finding)
         seen.append(finding.key)
@@ -484,11 +489,16 @@ def scan_and_store(db: Session) -> dict[str, Any]:
                 "last_message": live_hits.get(row["id"]) or "watching this laptop — no live hit this cycle",
             }
         )
-    message = (
-        f"Laptop malware sweep: {created} new live hit(s) across {len(hits_by_family)} family(ies)"
-        if created
-        else f"Laptop malware sweep: watching {len(families)} families, no new live hit"
-    )
+    if waiting:
+        message = (
+            f"Laptop malware sweep: 1 live hit now, {waiting} more will appear one by one"
+        )
+    elif created:
+        message = (
+            f"Laptop malware sweep: {created} new live hit(s) across {len(hits_by_family)} family(ies)"
+        )
+    else:
+        message = f"Laptop malware sweep: watching {len(families)} families, no new live hit"
     return {
         "new_events": created,
         "observed": len(findings),
@@ -590,6 +600,9 @@ class EndpointMalwareMonitor:
                 self._scanning = False
 
     def _loop(self) -> None:
+        # Stagger after folder watch so the first open is not a malware burst.
+        if self._stop.wait(12.0):
+            return
         while not self._stop.is_set():
             try:
                 self.scan_once()

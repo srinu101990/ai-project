@@ -198,13 +198,22 @@ def _collect_live_network(
     seen_sources: set[str] = set()
     non_benign = 0
 
-    # Always keep the first event from each live source so a projector demo
-    # shows Network IDS + Endpoint + Firewall + DNS + Email + Auth together.
-    for finding in report.findings:
+    findings = list(report.findings)
+    if batch_size <= 2:
+        findings.sort(
+            key=lambda item: (
+                0 if item.threat_hint and item.threat_hint != "benign" else 1,
+            )
+        )
+
+    # Projector sweeps keep one event per source. Live monitor stores one finding
+    # per cycle so the dashboard fills in real time instead of a first-open burst.
+    for finding in findings:
         event = _event_from_finding(finding)
         first_from_source = event.source not in seen_sources
         if (
-            event.threat_type == "benign"
+            batch_size > 2
+            and event.threat_type == "benign"
             and not first_from_source
             and non_benign >= max(3, batch_size // 2)
         ):

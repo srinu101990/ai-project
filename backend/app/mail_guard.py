@@ -248,17 +248,22 @@ def check_and_store(
     }
 
 
-def scan_drop_folder(db: Session) -> dict[str, Any]:
+def scan_drop_folder(db: Session, *, max_store: int = 1) -> dict[str, Any]:
     seen: list[str] = _read_json(SEEN_PATH, [])
     created = 0
     skipped = 0
+    waiting = 0
     last_verdict = None
+    limit = max(1, int(max_store))
     for path in sorted(DROP_DIR.glob("*")):
         if path.suffix.lower() not in {".eml", ".txt", ".msg"}:
             continue
         key = str(path.resolve())
         if key in seen:
             skipped += 1
+            continue
+        if created >= limit:
+            waiting += 1
             continue
         raw = path.read_bytes()
         if path.suffix.lower() == ".eml":
@@ -271,13 +276,17 @@ def scan_drop_folder(db: Session) -> dict[str, Any]:
         seen.append(key)
         created += 1
     _write_json(SEEN_PATH, seen[-400:])
+    if waiting:
+        message = f"Inbox drop folder: 1 mail live now, {waiting} more will appear one by one"
+    else:
+        message = f"Inbox drop folder: {created} new mail(s), {skipped} already seen"
     return {
-        "scanned": created + skipped,
+        "scanned": created + skipped + waiting,
         "new_events": created,
         "skipped": skipped,
         "drop_dir": str(DROP_DIR),
         "last": last_verdict,
-        "message": f"Inbox drop folder: {created} new mail(s), {skipped} already seen",
+        "message": message,
     }
 
 
@@ -309,6 +318,8 @@ class MailInboxMonitor:
         self._last_events = 0
         self._last_phishing = 0
         self._total_phishing = 0
+        self._drip_ids: list[bytes] = []
+        self._drip_thread: threading.Thread | None = None
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -434,12 +445,23 @@ class MailInboxMonitor:
                 if item not in merged:
                     merged.append(item)
             ids = merged[-25:]
-            seen_ids: list[str] = [] if force else _read_json(SEEN_PATH, [])
             persisted = _read_json(SEEN_PATH, [])
-            for msg_id in ids:
+            newest_first = list(reversed(ids))
+            pending: list[bytes] = []
+            dripping: set[bytes] = set()
+            with self._lock:
+                dripping = set(self._drip_ids)
+            for msg_id in newest_first:
                 key = f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
-                if not force and key in seen_ids:
+                if msg_id in dripping:
                     continue
+                if not force and key in persisted:
+                    continue
+                pending.append(msg_id)
+            work = pending[:1]
+            leftover = pending[1:]
+            for msg_id in work:
+                key = f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
                 fetched += 1
                 _typ, raw = client.fetch(msg_id, "(BODY.PEEK[])")
                 blob = _imap_fetch_bytes(raw)
@@ -459,20 +481,29 @@ class MailInboxMonitor:
                     persisted.append(key)
                 created += 1
             _write_json(SEEN_PATH, persisted[-800:])
+            if leftover:
+                with self._lock:
+                    queued = set(self._drip_ids)
+                    for item in leftover:
+                        if item not in queued:
+                            self._drip_ids.append(item)
+                self._start_mail_drip()
             try:
                 client.logout()
             except Exception:
                 pass
             client = None
+            waiting = len(leftover)
             if phishing_hits:
                 message = (
                     f"PHISHING DETECTED in {phishing_hits} mail(s) for {user}. "
-                    f"Read {fetched} inbox message(s), stored {created}."
+                    f"Streaming live — 1 shown now"
+                    + (f", {waiting} more one by one." if waiting else ".")
                 )
-            elif fetched:
+            elif created:
                 message = (
-                    f"Inbox {user}: read {fetched} message(s), stored {created}, "
-                    f"no phishing this cycle"
+                    f"Inbox {user}: live stream started, 1 message classified now"
+                    + (f", {waiting} more will appear one by one." if waiting else ".")
                 )
             else:
                 message = f"Inbox {user}: 0 messages in INBOX (check IMAP is on and this is the right mailbox)"
@@ -507,7 +538,80 @@ class MailInboxMonitor:
             with self._lock:
                 self._polling = False
 
+    def _start_mail_drip(self) -> None:
+        with self._lock:
+            if self._drip_thread and self._drip_thread.is_alive():
+                return
+            thread = threading.Thread(target=self._drip_loop, name="mail-drip", daemon=True)
+            self._drip_thread = thread
+        thread.start()
+
+    def _drip_loop(self) -> None:
+        from .database import SessionLocal
+
+        while True:
+            with self._lock:
+                if not self._drip_ids or not self._running:
+                    return
+                msg_id = self._drip_ids.pop(0)
+                host, user, password, mailbox = self._host, self._username, self._password, self._mailbox
+            if self._stop.wait(7.0):
+                return
+            db = SessionLocal()
+            client = None
+            try:
+                client = _open_imap(host)
+                client.login(user, password)
+                typ, _ = client.select(mailbox, readonly=True)
+                if typ != "OK":
+                    continue
+                _typ, raw = client.fetch(msg_id, "(BODY.PEEK[])")
+                blob = _imap_fetch_bytes(raw)
+                if not blob:
+                    continue
+                sender, subject, body = parse_eml_bytes(blob)
+                stored = check_and_store(
+                    db,
+                    sender=sender,
+                    subject=subject,
+                    body=body or subject or "(empty message)",
+                    origin=f"imap:{mailbox}",
+                )
+                key = f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
+                persisted = _read_json(SEEN_PATH, [])
+                if key not in persisted:
+                    persisted.append(key)
+                    _write_json(SEEN_PATH, persisted[-800:])
+                left = 0
+                with self._lock:
+                    left = len(self._drip_ids)
+                    self._last_events = 1
+                    if stored.get("phishing"):
+                        self._last_phishing = 1
+                        self._total_phishing += 1
+                        self._last_message = (
+                            f"PHISHING DETECTED for {user}. "
+                            f"{left} more mail(s) still streaming one by one."
+                        )
+                    else:
+                        self._last_message = (
+                            f"Inbox {user}: next mail classified live. "
+                            f"{left} remaining in the stream."
+                        )
+                    self._last_at = datetime.now(timezone.utc)
+            except Exception:
+                continue
+            finally:
+                if client is not None:
+                    try:
+                        client.logout()
+                    except Exception:
+                        pass
+                db.close()
+
     def _loop(self) -> None:
+        if self._stop.wait(5.0):
+            return
         while not self._stop.is_set():
             try:
                 self.poll_once()

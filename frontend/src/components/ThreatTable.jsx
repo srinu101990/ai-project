@@ -2,7 +2,7 @@ const STATUSES = ['open', 'investigating', 'contained', 'resolved']
 
 export default function ThreatTable({ threats, onStatusChange, onOpen }) {
   if (!threats?.length) {
-    return <div className="empty">No threat events yet. Run a network collection scan.</div>
+    return <div className="empty">No detections yet. Live monitoring will show each threat one by one.</div>
   }
 
   return (

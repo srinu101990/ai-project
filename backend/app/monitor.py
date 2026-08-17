@@ -94,10 +94,11 @@ class NetworkMonitor:
         return self.status()
 
     def _loop(self) -> None:
-        # First pass immediately, then wait between cycles.
+        # Let the dashboard open empty, then stream one finding at a time.
+        if self._stop.wait(8.0):
+            return
         while not self._stop.is_set():
             self._run_once()
-            # Wait in small slices so stop() is responsive.
             waited = 0.0
             interval = float(self._interval)
             while waited < interval and not self._stop.is_set():

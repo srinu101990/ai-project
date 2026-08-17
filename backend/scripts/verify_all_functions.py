@@ -238,7 +238,7 @@ def main() -> int:
         status, body, err = request("POST", "/api/files/test-sample", {}, timeout=60)
         check(
             "files test-sample",
-            status == 200 and int(body.get("new_events") or 0) >= 1,
+            status == 200 and len((body or {}).get("created") or []) >= 1,
             err or body,
         )
         status, body, err = request("POST", "/api/files/scan", {}, timeout=60)
