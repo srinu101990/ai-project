@@ -5,7 +5,7 @@ export default function SystemMetaRow({ health, monitor, lastRefresh }) {
       ? 'SIMULATED'
       : 'LOCAL'
   const source = monitor?.enabled
-    ? `Live LAN Scan · ${health?.scan_subnet || 'auto subnet'}`
+    ? `Multi-source LAN · ${health?.scan_subnet || 'auto subnet'}`
     : 'Manual / Network · SQLite'
   const updated = lastRefresh
     ? lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })

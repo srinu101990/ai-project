@@ -53,6 +53,19 @@ class CollectRequest(BaseModel):
     )
 
 
+class SourceSnapshotOut(BaseModel):
+    source_id: str
+    source_name: str
+    channel: str = ""
+    description: str = ""
+    online: bool = False
+    observed: int = 0
+    findings: int = 0
+    message: str = ""
+    last_threat_type: Optional[str] = None
+    last_at: Optional[datetime] = None
+
+
 class CollectResponse(BaseModel):
     job_id: int
     status: str
@@ -62,9 +75,37 @@ class CollectResponse(BaseModel):
     mode: str = "network"
     subnet: Optional[str] = None
     local_ip: Optional[str] = None
+    hostname: Optional[str] = None
     hosts_alive: Optional[int] = None
     open_ports: Optional[int] = None
+    sources: list[SourceSnapshotOut] = []
     events: list[ThreatEventOut]
+
+
+class CollectSourcesResponse(BaseModel):
+    local_ip: Optional[str] = None
+    subnet: Optional[str] = None
+    hostname: Optional[str] = None
+    last_message: Optional[str] = None
+    source_count: int
+    sources: list[SourceSnapshotOut]
+
+
+class CollectionJobOut(BaseModel):
+    id: int
+    status: str
+    sources_scanned: int
+    events_collected: int
+    message: Optional[str] = None
+    mode: Optional[str] = None
+    subnet: Optional[str] = None
+    local_ip: Optional[str] = None
+    sources: list[SourceSnapshotOut] = []
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 class StatsResponse(BaseModel):

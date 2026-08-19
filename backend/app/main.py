@@ -6,6 +6,7 @@ bundled Swagger assets, and optional serving of the built React frontend.
 
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,10 +20,11 @@ from sqlalchemy.orm import Session
 from .classifier import classifier
 from .collector import collect_from_network, ingest_event
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
-from .database import Base, engine, get_db
+from .database import Base, engine, ensure_schema, get_db
 from .demo_feed import autostart_demo_feed, demo_feed
-from .models import ThreatEvent
+from .models import CollectionJob, ThreatEvent
 from .monitor import autostart_monitor, monitor
+from .multi_source import catalog_with_status
 from .network_scanner import resolve_scan_network
 from .report import build_report_summary, generate_pdf_report, get_stats
 from .schemas import (
@@ -30,6 +32,8 @@ from .schemas import (
     ClassifyResponse,
     CollectRequest,
     CollectResponse,
+    CollectSourcesResponse,
+    CollectionJobOut,
     DemoFeedControlRequest,
     DemoFeedStatus,
     IngestRequest,
@@ -57,6 +61,7 @@ def seed_if_empty(db: Session) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_schema()
     # Ensure classifier model is warm (trained/loaded locally).
     _ = classifier.classify("warmup benign traffic sample")
     from .database import SessionLocal
@@ -142,6 +147,8 @@ def health():
         "local_ip": local_ip,
         "scan_subnet": subnet,
         "frontend_bundled": FRONTEND_DIST.exists(),
+        "multi_source_collection": True,
+        "collection_source_count": 6,
     }
 
 
@@ -228,6 +235,50 @@ def collect_threats(payload: CollectRequest, db: Session = Depends(get_db)):
         mode=payload.mode,
     )
     return result
+
+
+@app.get("/api/collect/sources", response_model=CollectSourcesResponse)
+def collect_sources():
+    """List the live collection sensors and their last simultaneous snapshot."""
+    return catalog_with_status()
+
+
+@app.get("/api/collect/jobs", response_model=list[CollectionJobOut])
+def list_collection_jobs(
+    limit: int = Query(default=8, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    jobs = (
+        db.query(CollectionJob)
+        .order_by(CollectionJob.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_job_to_out(job) for job in jobs]
+
+
+def _job_to_out(job: CollectionJob) -> CollectionJobOut:
+    sources = []
+    if job.details:
+        try:
+            parsed = json.loads(job.details)
+            if isinstance(parsed, list):
+                sources = parsed
+        except json.JSONDecodeError:
+            sources = []
+    return CollectionJobOut(
+        id=job.id,
+        status=job.status,
+        sources_scanned=job.sources_scanned,
+        events_collected=job.events_collected,
+        message=job.message,
+        mode=job.mode,
+        subnet=job.subnet,
+        local_ip=job.local_ip,
+        sources=sources,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+    )
 
 
 @app.post("/api/ingest", response_model=ThreatEventOut)

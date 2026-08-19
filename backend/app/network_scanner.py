@@ -343,7 +343,17 @@ def _findings_from_open_ports(host: str, open_ports: list[int], local_ip: str) -
     return findings
 
 
-def scan_network(max_findings: int = 20) -> ScanReport:
+def connection_findings(local_ip: str) -> list[NetworkFinding]:
+    """Public wrapper for local socket / session findings."""
+    return _connection_findings(local_ip)
+
+
+def scan_network(
+    max_findings: int = 20,
+    *,
+    include_connections: bool = True,
+    include_recon: bool = True,
+) -> ScanReport:
     """Run a live network detection pass and return structured findings."""
     local_ip, network = resolve_scan_network()
     alive = discover_hosts(network, local_ip)
@@ -363,34 +373,36 @@ def scan_network(max_findings: int = 20) -> ScanReport:
         open_port_total += len(ports)
         findings.extend(_findings_from_open_ports(host, ports, local_ip))
 
-    findings.extend(_connection_findings(local_ip))
+    if include_connections:
+        findings.extend(_connection_findings(local_ip))
 
     # Always record a live reconnaissance summary so the dashboard shows
     # real network activity even on quiet/hardened subnets.
     host_list = ", ".join(sorted(targets.keys())[:8])
-    findings.append(
-        NetworkFinding(
-            source="Network Recon Sensor",
-            source_ip=local_ip,
-            destination_ip=None,
-            protocol="TCP",
-            raw_payload=(
-                f"Network reconnaissance completed on {network}. "
-                f"Scanner host {local_ip} observed {len(targets)} responsive host(s) "
-                f"[{host_list or 'none'}] and {open_port_total} open service port(s). "
-                f"Scheduled backup completed successfully on monitoring node. "
-                f"Normal outbound HTTPS traffic baseline looks healthy."
-            ),
-            threat_hint="benign",
-            severity_hint="low",
-            indicators=[
-                "network-recon",
-                f"hosts:{len(targets)}",
-                f"open-ports:{open_port_total}",
-                str(network),
-            ],
+    if include_recon:
+        findings.append(
+            NetworkFinding(
+                source="Network Recon Sensor",
+                source_ip=local_ip,
+                destination_ip=None,
+                protocol="TCP",
+                raw_payload=(
+                    f"Network reconnaissance completed on {network}. "
+                    f"Scanner host {local_ip} observed {len(targets)} responsive host(s) "
+                    f"[{host_list or 'none'}] and {open_port_total} open service port(s). "
+                    f"Scheduled backup completed successfully on monitoring node. "
+                    f"Normal outbound HTTPS traffic baseline looks healthy."
+                ),
+                threat_hint="benign",
+                severity_hint="low",
+                indicators=[
+                    "network-recon",
+                    f"hosts:{len(targets)}",
+                    f"open-ports:{open_port_total}",
+                    str(network),
+                ],
+            )
         )
-    )
 
     # Prefer higher-severity / non-benign items first.
     severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}

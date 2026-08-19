@@ -4,13 +4,17 @@ Full-stack project that **detects threats on your network**, **classifies** them
 
 The UI follows a neon cyber-ops aesthetic: threat definition cards, KPI tiles, log analyzer terminal, distribution donut, and severity density charts.
 
-**No cloud APIs required** after the first dependency install — AI, fonts, SQLite, and the UI all run locally. Threat collection scans your LAN (hosts, risky ports, local connections).
+**No cloud APIs required** after the first dependency install — AI, fonts, SQLite, and the UI all run locally.
+
+**Step 1 (this release):** collect cyber threat information from the network using **six sensors at the same time** — Network IDS, Endpoint Detection, Firewall Flow Logs, DNS Sinkhole, Email Gateway, and Web Proxy.
+
+Later steps already in the app: AI classification, real-time charts, and PDF decision reports.
 
 ## Features
 
 | Requirement | Implementation |
 |---|---|
-| Data Collection | Live LAN host/port/connection scan + manual ingest API |
+| Data Collection | **Step 1** — six live sensors run simultaneously (LAN IDS, endpoint, firewall, DNS, email, web proxy) + manual ingest |
 | AI Classification | Hybrid ML (TF-IDF + Logistic Regression) + explainable rule indicators |
 | Real-time Visualization | Live dashboard with timeline, pie, and severity charts |
 | Reporting | Executive summary + downloadable PDF decision report |
@@ -52,7 +56,7 @@ Then open:
 
 Continuous monitoring starts automatically when the server boots. The dashboard
 refreshes on its own — you do **not** need to keep clicking scan. Use **Pause
-Monitoring** / **Resume Monitoring** if you want to stop the loop, or **Scan Now**
+Monitoring** / **Resume Monitoring** if you want to stop the loop, or **Collect From All Sources**
 for an immediate extra pass.
 
 ### Optional environment variables
@@ -112,20 +116,28 @@ Dashboard (dev): **http://127.0.0.1:5173**
 
 ## How network threat detection works
 
+**Step 1 — simultaneous collection**
+
 1. Auto-detects the local IPv4 address and `/24` subnet (or `SCAN_SUBNET`)
-2. Continuously repeats scans in the background (default every 45 seconds)
-3. Concurrently probes nearby hosts on common discovery ports
-4. Deep-scans responsive hosts for risky services (SMB, RDP, Telnet, DB ports, etc.)
-5. Inspects local listening sockets and suspicious outbound sessions (`psutil`)
-6. Classifies each finding with the on-device AI model and stores it in SQLite
-7. Skips duplicate findings so the feed does not flood
-8. Dashboard marks events as **live** (network scan / ingest) or **simulated**
+2. Runs six sensors in parallel on every collect/monitor cycle:
+   - **Network IDS Sensor** — LAN host discovery and risky-port scan
+   - **Endpoint Detection Agent** — local process inspection
+   - **Firewall Flow Logs** — listeners and suspicious outbound sessions
+   - **DNS Sinkhole** — DNS (port 53) listeners
+   - **Email Gateway** — SMTP/IMAP/POP exposure
+   - **Web Proxy** — HTTP-alt / proxy listeners
+3. Continuously repeats the sweep in the background (default every 45 seconds)
+4. Classifies each finding with the on-device AI model and stores it in SQLite
+5. Skips duplicate findings so the feed does not flood
+6. Dashboard **Sources** tab shows each sensor ONLINE/IDLE with observed counts
 
 No root/pcap privileges are required. This is TCP connect scanning + host connection analysis — not full packet capture.
 
 ## Main API endpoints
 
-- `POST /api/collect` — one-shot live network scan & classify
+- `POST /api/collect` — one-shot simultaneous multi-source collect & classify
+- `GET /api/collect/sources` — live sensor catalog and last snapshot
+- `GET /api/collect/jobs` — recent collection job history
 - `GET /api/monitor` — continuous monitor status
 - `POST /api/monitor/start` — start continuous monitoring
 - `POST /api/monitor/stop` — pause continuous monitoring
