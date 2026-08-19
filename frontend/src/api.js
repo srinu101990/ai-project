@@ -33,6 +33,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ batch_size: batchSize, mode }),
     }),
+  collectSources: () => request('/collect/sources'),
+  collectJobs: (limit = 8) => request(`/collect/jobs?limit=${limit}`),
   monitorStatus: () => request('/monitor'),
   startMonitor: (intervalSeconds) =>
     request('/monitor/start', {

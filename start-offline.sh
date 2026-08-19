@@ -51,7 +51,7 @@ echo "CYBER_SENTINEL.AI — ${MODE} detection mode"
 echo "  Local     : http://127.0.0.1:${PORT}"
 echo "  LAN       : http://${LAN_IP}:${PORT}"
 echo "  API docs  : http://${LAN_IP}:${PORT}/docs"
-echo "  Collect   : live LAN host/port/connection scan (COLLECTION_MODE=${MODE})"
+echo "  Collect   : 6 simultaneous live sensors (COLLECTION_MODE=${MODE})"
 echo ""
 
 cd backend

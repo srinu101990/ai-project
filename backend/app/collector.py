@@ -1,7 +1,8 @@
-"""Cyber threat data collection — live network scan + optional simulated demo."""
+"""Cyber threat data collection — simultaneous live sources + optional simulated demo."""
 
 from __future__ import annotations
 
+import json
 import random
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -11,7 +12,8 @@ from sqlalchemy.orm import Session
 from .classifier import classifier
 from .config import ALLOW_SIMULATED_FALLBACK, COLLECTION_MODE, MONITOR_DEDUPE_MINUTES
 from .models import CollectionJob, ThreatEvent
-from .network_scanner import NetworkFinding, scan_network
+from .multi_source import collect_multi_source, snapshots_as_dicts
+from .network_scanner import NetworkFinding
 
 THREAT_SOURCES = [
     "Network IDS Sensor",
@@ -20,7 +22,6 @@ THREAT_SOURCES = [
     "Firewall Flow Logs",
     "DNS Sinkhole",
     "Web Proxy",
-    "Threat Intel Feed",
 ]
 
 SAMPLE_PAYLOADS = [
@@ -161,6 +162,24 @@ def _collect_simulated(db: Session, batch_size: int, job: CollectionJob) -> dict
     job.sources_scanned = len(sources)
     job.events_collected = len(created)
     job.message = f"Simulated collection: {len(created)} events from {len(sources)} sources"
+    job.mode = "simulated"
+    job.details = json.dumps(
+        [
+            {
+                "source_id": source.lower().replace(" ", "-"),
+                "source_name": source,
+                "channel": "simulated",
+                "description": "Demo payload source",
+                "online": True,
+                "observed": 1,
+                "findings": sum(1 for event in created if event.source == source),
+                "message": "Simulated source",
+                "last_threat_type": None,
+                "last_at": datetime.now(timezone.utc).isoformat(),
+            }
+            for source in sources
+        ]
+    )
     job.finished_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -174,6 +193,7 @@ def _collect_simulated(db: Session, batch_size: int, job: CollectionJob) -> dict
         "events_collected": job.events_collected,
         "message": job.message,
         "mode": "simulated",
+        "sources": json.loads(job.details or "[]"),
         "events": created,
     }
 
@@ -185,9 +205,10 @@ def _collect_live_network(
     *,
     dedupe: bool = False,
 ) -> dict[str, Any]:
-    report = scan_network(max_findings=max(batch_size, 8))
+    report = collect_multi_source(max_findings=max(batch_size, 12))
     created: list[ThreatEvent] = []
     skipped_duplicates = 0
+    source_snapshots = snapshots_as_dicts(report.snapshots)
 
     # Prefer storing every live finding; only trim excess benign noise after
     # we already have enough higher-signal events.
@@ -211,6 +232,10 @@ def _collect_live_network(
         job.message = (
             f"{report.message}. No live findings — seeding simulated demo events."
         )
+        job.mode = "network"
+        job.subnet = report.subnet
+        job.local_ip = report.local_ip
+        job.details = json.dumps(source_snapshots)
         db.commit()
         return _collect_simulated(db, batch_size=min(batch_size, 6), job=job)
 
@@ -219,9 +244,13 @@ def _collect_live_network(
         message = f"{message} ({skipped_duplicates} duplicate finding(s) skipped)"
 
     job.status = "completed"
-    job.sources_scanned = report.hosts_scanned
+    job.sources_scanned = len(report.snapshots) or report.hosts_alive
     job.events_collected = len(created)
     job.message = message
+    job.mode = "network"
+    job.subnet = report.subnet
+    job.local_ip = report.local_ip
+    job.details = json.dumps(source_snapshots)
     job.finished_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -237,8 +266,10 @@ def _collect_live_network(
         "mode": "network",
         "subnet": report.subnet,
         "local_ip": report.local_ip,
+        "hostname": report.hostname,
         "hosts_alive": report.hosts_alive,
         "open_ports": report.open_ports,
+        "sources": source_snapshots,
         "events": created,
     }
 

@@ -23,6 +23,8 @@ import SystemMetaRow from './components/SystemMetaRow'
 import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
 import ThreatDefinitions from './components/ThreatDefinitions'
+import LiveSourcesPanel from './components/LiveSourcesPanel'
+import CollectionJobs from './components/CollectionJobs'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -48,6 +50,8 @@ function App() {
   const [monitorBusy, setMonitorBusy] = useState(false)
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
+  const [sourceCatalog, setSourceCatalog] = useState(null)
+  const [collectionJobs, setCollectionJobs] = useState([])
   const [classifiedType, setClassifiedType] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState([])
@@ -111,7 +115,7 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [statsData, threatData, reportData, healthData, monitorData, demoData] =
+      const [statsData, threatData, reportData, healthData, monitorData, demoData, sourceData, jobData] =
         await Promise.all([
           api.getStats(),
           api.getThreats({ limit: 40 }),
@@ -119,6 +123,8 @@ function App() {
           api.health().catch(() => null),
           api.monitorStatus().catch(() => null),
           api.demoFeedStatus().catch(() => null),
+          api.collectSources().catch(() => null),
+          api.collectJobs(8).catch(() => []),
         ])
       setStats(statsData)
       setThreats(threatData)
@@ -126,6 +132,8 @@ function App() {
       if (healthData) setHealth(healthData)
       if (monitorData) setMonitor(monitorData)
       if (demoData) setDemoFeed(demoData)
+      if (sourceData) setSourceCatalog(sourceData)
+      if (Array.isArray(jobData)) setCollectionJobs(jobData)
       registerNewDetections(threatData)
       setLastRefresh(new Date())
     } catch (err) {
@@ -177,6 +185,17 @@ function App() {
         .filter(Boolean)
         .join(' · ')
       showToast(detail)
+      if (Array.isArray(result.sources) && result.sources.length) {
+        setSourceCatalog((prev) => ({
+          ...(prev || {}),
+          local_ip: result.local_ip || prev?.local_ip,
+          subnet: result.subnet || prev?.subnet,
+          hostname: result.hostname || prev?.hostname,
+          last_message: result.message,
+          source_count: result.sources.length,
+          sources: result.sources,
+        }))
+      }
       await refresh()
     } catch (err) {
       showToast(err.message || 'Network scan failed')
@@ -437,55 +456,60 @@ function App() {
       ) : null}
 
       {tab === 'sources' ? (
-        <section className="page-grid sources-page">
-          <div className="panel section">
-            <div className="section-head">
-              <h3>Network Collection</h3>
-              <span>Continuous LAN monitoring</span>
-            </div>
-            <p className="muted source-copy">
-              Live host/port/connection scanning runs in the background. Pause anytime, or force an
-              immediate scan of the current network.
-            </p>
-            <div className="action-bar compact">
-              <button
-                className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
-                onClick={handleToggleMonitor}
-                disabled={monitorBusy}
-              >
-                {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
-                {monitorBusy
-                  ? 'Updating…'
-                  : monitor?.enabled
-                    ? 'Pause Monitoring'
-                    : 'Resume Monitoring'}
-              </button>
-              <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
-                <Radar size={16} />
-                {collecting ? 'Scanning now…' : 'Scan Now'}
-              </button>
-              <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
-                <RefreshCw size={16} className={loading ? 'spin' : undefined} />
-                Refresh
-              </button>
-            </div>
-            <div className="source-status mono">
-              <div>
-                Status:{' '}
-                <strong>
-                  {monitor?.scanning
-                    ? 'Scanning…'
-                    : monitor?.enabled
-                      ? 'Monitoring'
-                      : 'Paused'}
-                </strong>
+        <section className="sources-page">
+          <LiveSourcesPanel catalog={sourceCatalog} />
+          <div className="page-grid sources-split">
+            <div className="panel section">
+              <div className="section-head">
+                <h3>Network Collection</h3>
+                <span>Continuous multi-source monitoring</span>
               </div>
-              <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
-              <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
-              <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
-              <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
-              <div>Last message: {monitor?.last_message || '—'}</div>
+              <p className="muted source-copy">
+                All six sensors run together on each cycle. Pause anytime, or force an immediate
+                simultaneous sweep of the current network.
+              </p>
+              <div className="action-bar compact">
+                <button
+                  className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
+                  onClick={handleToggleMonitor}
+                  disabled={monitorBusy}
+                >
+                  {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                  {monitorBusy
+                    ? 'Updating…'
+                    : monitor?.enabled
+                      ? 'Pause Monitoring'
+                      : 'Resume Monitoring'}
+                </button>
+                <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
+                  <Radar size={16} />
+                  {collecting ? 'Collecting now…' : 'Collect From All Sources'}
+                </button>
+                <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
+                  <RefreshCw size={16} className={loading ? 'spin' : undefined} />
+                  Refresh
+                </button>
+              </div>
+              <div className="source-status mono">
+                <div>
+                  Status:{' '}
+                  <strong>
+                    {monitor?.scanning
+                      ? 'Scanning…'
+                      : monitor?.enabled
+                        ? 'Monitoring'
+                        : 'Paused'}
+                  </strong>
+                </div>
+                <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
+                <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
+                <div>Sources: {sourceCatalog?.source_count || 6} simultaneous</div>
+                <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
+                <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
+                <div>Last message: {monitor?.last_message || sourceCatalog?.last_message || '—'}</div>
+              </div>
             </div>
+            <CollectionJobs jobs={collectionJobs} />
           </div>
           <IngestPanel onIngested={refresh} onToast={showToast} />
         </section>
