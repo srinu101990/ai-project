@@ -104,6 +104,22 @@ SKIP_DIR_NAMES = {
     "caches",
     "temp",
     "tmp",
+    "cyber_sentinel",
+    "cybersentinel",
+}
+
+DOC_FILENAMES = {
+    "readme.md",
+    "readme.txt",
+    "license",
+    "license.md",
+    "changelog.md",
+    "package.json",
+    "package-lock.json",
+    "requirements.txt",
+    "pyproject.toml",
+    "environment.json",
+    "offline_iocs.json",
 }
 
 MALWARE_TYPES = {
@@ -156,13 +172,64 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def removable_roots() -> list[Path]:
+    """Windows USB / SD card drive letters that Windows actually mounted."""
+    if os.name != "nt":
+        return []
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        bitmask = int(kernel32.GetLogicalDrives())
+    except Exception:
+        return []
+    drive_removable = 2
+    roots: list[Path] = []
+    for index in range(26):
+        if not bitmask & (1 << index):
+            continue
+        letter = chr(ord("A") + index)
+        root = Path(f"{letter}:/")
+        try:
+            kind = int(kernel32.GetDriveTypeW(str(root)))
+        except Exception:
+            continue
+        if kind == drive_removable and root.exists():
+            roots.append(root)
+    return roots
+
+
+def _is_this_project(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(PROJECT_ROOT.resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _looks_like_sentinel_repo(path: Path) -> bool:
+    name = path.name.lower()
+    if name.startswith("ai-project") or name in {"cyber_sentinel", "cybersentinel"}:
+        return True
+    return (path / "start-offline.bat").is_file() and (path / "backend" / "app").is_dir()
+
+
+def _is_demo_drop(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(DROP_DIR.resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def default_watch_folders() -> list[Path]:
-    """Entire user profile plus the demo drop folder (not only Desktop/Downloads)."""
+    """User profile, USB sticks, and file_drop — not this project's own source tree."""
     home = Path.home()
     candidates = [DROP_DIR, home]
     onedrive = home / "OneDrive"
     if onedrive.is_dir():
         candidates.append(onedrive)
+    candidates.extend(removable_roots())
     seen: set[str] = set()
     folders: list[Path] = []
     for path in candidates:
@@ -226,12 +293,20 @@ def _iter_watched_files(folders: Iterable[Path]) -> list[Path]:
             dirnames[:] = [
                 name
                 for name in dirnames
-                if name.lower() not in SKIP_DIR_NAMES and not name.startswith(".")
+                if name.lower() not in SKIP_DIR_NAMES
+                and not name.startswith(".")
+                and not name.lower().startswith("ai-project")
+                and not _looks_like_sentinel_repo(current / name)
             ]
             for name in filenames:
                 if name.startswith("."):
                     continue
-                found.append(current / name)
+                path = current / name
+                if _is_this_project(path) and not _is_demo_drop(path):
+                    continue
+                if name.lower() in DOC_FILENAMES and not RANSOM_NOTE_NAME.search(name):
+                    continue
+                found.append(path)
                 if len(found) >= 800:
                     found.sort(
                         key=lambda item: item.stat().st_mtime if item.exists() else 0,
@@ -263,6 +338,20 @@ def evaluate_path(path: Path) -> FileVerdict:
     extra: list[str] = []
     suffixes = _suffixes(name)
     last_ext = suffixes[-1] if suffixes else ""
+
+    # Project docs name every malware family — that is not an infection.
+    if lower in DOC_FILENAMES and not RANSOM_NOTE_NAME.search(lower):
+        return FileVerdict(
+            malicious=False,
+            threat_type="benign",
+            severity="low",
+            confidence=0.99,
+            indicators=["documentation-skip"],
+            verdict="LOOKS SAFE",
+            path=str(path),
+            filename=name,
+            payload=f"Skipped project documentation {name}",
+        )
 
     if DOUBLE_EXT.search(lower):
         extra.append("double extension dropper")
@@ -497,13 +586,23 @@ class FileFolderMonitor:
         self._total_malicious = 0
 
     def status(self) -> dict[str, Any]:
+        usb = [str(item) for item in removable_roots()]
         with self._lock:
+            if usb:
+                usb_message = "USB watching: " + " · ".join(usb)
+            else:
+                usb_message = (
+                    "USB: none mounted. Plug a stick in and wait a few seconds. "
+                    "If this laptop has USB storage disabled, Windows will not show a drive letter."
+                )
             return {
                 "enabled": self._running,
                 "scanning": self._scanning,
                 "interval_seconds": self._interval,
                 "cycles_completed": self._cycles,
                 "folders": [str(item) for item in self._folders],
+                "usb_drives": usb,
+                "usb_message": usb_message,
                 "last_message": self._last_message,
                 "last_error": self._last_error,
                 "last_at": self._last_at,
@@ -550,14 +649,18 @@ class FileFolderMonitor:
     def scan_once(self) -> dict[str, Any]:
         from .database import SessionLocal
 
+        folders = default_watch_folders()
+        usb = removable_roots()
         with self._lock:
-            folders = list(self._folders) or default_watch_folders()
+            self._folders = folders
             self._scanning = True
         db = SessionLocal()
         try:
             result = scan_folders(db, folders)
             created = int(result.get("new_events") or 0)
             message = result.get("message") or "Folder scan complete"
+            if usb:
+                message = f"{message} · USB {', '.join(str(item) for item in usb)}"
             with self._lock:
                 self._cycles += 1
                 self._last_events = created

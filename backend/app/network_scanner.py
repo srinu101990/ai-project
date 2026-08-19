@@ -38,7 +38,7 @@ RISKY_PORTS: dict[int, tuple[str, str, str]] = {
     139: ("NetBIOS", "high", "malware"),
     143: ("IMAP", "medium", "phishing"),
     443: ("HTTPS", "low", "benign"),
-    445: ("SMB", "critical", "ransomware"),
+    445: ("SMB", "medium", "malware"),
     993: ("IMAPS", "low", "benign"),
     995: ("POP3S", "low", "benign"),
     1433: ("MSSQL", "high", "malware"),
@@ -340,6 +340,9 @@ def _connection_findings(local_ip: str) -> list[NetworkFinding]:
             lip = local_ip
 
         if status == psutil.CONN_LISTEN and lport in RISKY_PORTS:
+            # Local Windows File Sharing is not a ransomware infection.
+            if lport in {139, 445}:
+                continue
             service, severity, threat = RISKY_PORTS[lport]
             listening_risky += 1
             findings.append(
@@ -350,8 +353,7 @@ def _connection_findings(local_ip: str) -> list[NetworkFinding]:
                     protocol="TCP",
                     raw_payload=(
                         f"Local listener detected on {service} port {lport}. "
-                        f"Exposed {service} services are frequently abused for "
-                        f"remote code execution, worm propagation, and lateral movement."
+                        f"Unexpected {service} exposure can be abused for remote access."
                     ),
                     threat_hint=threat,
                     severity_hint=severity,
@@ -447,8 +449,9 @@ def _findings_from_open_ports(host: str, open_ports: list[int], local_ip: str) -
 
         payload_map = {
             "ransomware": (
-                f"Exposed {service} port {port} on {host}. SMB/RDP exposure is a common "
-                f"ransomware worm propagation path; shadow copies and file encryption risk elevated."
+                f"Exposed {service} port {port} on {host}. Remote desktop exposure can be "
+                f"abused for unauthorized access. This is a network exposure finding, not "
+                f"proof that files on this PC are already encrypted."
             ),
             "phishing": (
                 f"Mail/web service {service}:{port} reachable on {host}. Attackers often abuse "

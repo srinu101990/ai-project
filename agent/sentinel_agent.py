@@ -322,6 +322,8 @@ SKIP_DIR_NAMES = {
     "tmp",
     ".cursor",
     ".vscode",
+    "cyber_sentinel",
+    "cybersentinel",
 }
 
 MAX_SCAN_FILES = 1200
@@ -403,7 +405,13 @@ def iter_scan_files(roots: list[Path]) -> list[Path]:
             dirnames[:] = [
                 name
                 for name in dirnames
-                if name.lower() not in SKIP_DIR_NAMES and not name.startswith(".")
+                if name.lower() not in SKIP_DIR_NAMES
+                and not name.startswith(".")
+                and not name.lower().startswith("ai-project")
+                and not (
+                    (current / name / "start-offline.bat").is_file()
+                    and (current / name / "backend" / "app").is_dir()
+                )
             ]
             for name in filenames:
                 if name.startswith("."):

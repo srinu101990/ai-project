@@ -299,6 +299,8 @@ class FileWatchStatus(BaseModel):
     interval_seconds: int = 8
     cycles_completed: int = 0
     folders: list[str] = []
+    usb_drives: list[str] = []
+    usb_message: Optional[str] = None
     last_message: Optional[str] = None
     last_error: Optional[str] = None
     last_at: Optional[datetime] = None

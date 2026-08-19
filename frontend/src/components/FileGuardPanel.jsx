@@ -67,15 +67,15 @@ export default function FileGuardPanel({ onToast, onChecked, fileStatus }) {
         <span>{watching ? 'LIVE — new files are being checked' : 'Folder watch is off'}</span>
       </div>
       <p className="muted source-copy">
-        This laptop watches Downloads, Desktop, Documents, and the project <code>file_drop/</code>
-        folder. Suspicious names (invoice.pdf.exe), ransomware notes, and malware-like content are
-        classified with the on-device AI model. It does not replace antivirus and does not scan
-        inside other PCs.
+        This laptop watches Downloads, Desktop, Documents, USB sticks, and the project{' '}
+        <code>file_drop/</code> folder. It does not scan this project&apos;s own README or demo
+        sample files, so those will not spam popups. Suspicious names on a USB stick
+        (invoice.pdf.exe, README_FOR_DECRYPT) are classified one at a time.
       </p>
       <ol className="mail-steps">
         <li>Leave folder watch on (it starts with the app)</li>
-        <li>Drop a suspicious file into Downloads, or click Drop test samples</li>
-        <li>A popup appears if it looks like malware or ransomware</li>
+        <li>Plug a USB stick — it should appear in the USB list below if Windows mounts it</li>
+        <li>A popup appears only for a new suspicious file, not for this project folder</li>
       </ol>
 
       <div className={`mail-watch-banner ${watching ? 'on' : ''}`}>
@@ -85,6 +85,20 @@ export default function FileGuardPanel({ onToast, onChecked, fileStatus }) {
           : 'Folder watch is off'}
         {status?.total_malicious ? ` · hits: ${status.total_malicious}` : ''}
       </div>
+
+      <div className={`mail-watch-banner ${status?.usb_drives?.length ? 'on' : ''}`}>
+        <span className="live-dot" />
+        {status?.usb_message || 'USB: checking…'}
+      </div>
+      {status?.usb_drives?.length ? (
+        <ul className="mail-steps">
+          {status.usb_drives.map((drive) => (
+            <li key={drive}>
+              USB in list: <code>{drive}</code>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <div className="action-bar compact">
         <button

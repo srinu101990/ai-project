@@ -28,6 +28,7 @@ import MailGuardPanel from './components/MailGuardPanel'
 import LiveSourcesPanel from './components/LiveSourcesPanel'
 import ConnectedPCs from './components/ConnectedPCs'
 import ClientBanner from './components/ClientBanner'
+import FileGuardPanel from './components/FileGuardPanel'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -96,9 +97,10 @@ function App() {
   const [bellOpen, setBellOpen] = useState(false)
   const [threatPopups, setThreatPopups] = useState([])
   const [detailThreat, setDetailThreat] = useState(null)
+  const [fileStatus, setFileStatus] = useState(null)
   const knownThreatIds = useRef(new Set())
   const popupQueue = useRef([])
-  const revealQueue = useRef([])
+  const primed = useRef(false)
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -112,20 +114,29 @@ function App() {
 
   const pushThreatPopups = useCallback((incoming) => {
     const chronological = [...incoming].reverse()
-    popupQueue.current = [...popupQueue.current, ...chronological]
+    popupQueue.current = chronological.slice(0, 1)
   }, [])
 
-  const enqueueLiveThreats = useCallback((incoming) => {
-    const chronological = [...(incoming || [])].sort(
-      (left, right) => (left.id || 0) - (right.id || 0),
-    )
-    for (const item of chronological) {
-      if (!item?.id || knownThreatIds.current.has(item.id)) continue
-      knownThreatIds.current.add(item.id)
-      if (!item.threat_type || item.threat_type === 'benign') continue
-      revealQueue.current.push(item)
+  const ingestFromServer = useCallback((incoming) => {
+    const rows = (incoming || []).filter((item) => item?.id)
+    if (!primed.current) {
+      primed.current = true
+      for (const item of rows) knownThreatIds.current.add(item.id)
+      setThreats(rows.filter((item) => item.threat_type && item.threat_type !== 'benign'))
+      return
     }
-  }, [])
+    const fresh = rows.filter((item) => !knownThreatIds.current.has(item.id))
+    for (const item of fresh) knownThreatIds.current.add(item.id)
+    const alerts = fresh.filter((item) => item.threat_type && item.threat_type !== 'benign')
+    if (!alerts.length) return
+    setThreats((prev) => {
+      const ids = new Set(prev.map((row) => row.id))
+      return [...alerts.filter((row) => !ids.has(row.id)), ...prev]
+    })
+    setUnreadCount((count) => count + alerts.length)
+    setNotifications((prev) => [...alerts].reverse().concat(prev).slice(0, 20))
+    pushThreatPopups([alerts[alerts.length - 1]])
+  }, [pushThreatPopups])
 
   const refresh = useCallback(async () => {
     try {
@@ -138,6 +149,7 @@ function App() {
         sourceData,
         agentData,
         mailData,
+        filesData,
       ] = await Promise.all([
           api.getThreats({ limit: 40 }),
           api.reportSummary(),
@@ -147,6 +159,7 @@ function App() {
           api.liveSources().catch(() => null),
           api.remoteAgents().catch(() => null),
           api.mailStatus().catch(() => null),
+          api.fileStatus().catch(() => null),
         ])
       setThreats((prev) => {
         const fresh = new Map((threatData || []).map((item) => [item.id, item]))
@@ -159,14 +172,15 @@ function App() {
       if (sourceData) setSourceStatus(sourceData)
       if (agentData) setAgentStatus(agentData)
       if (mailData) setMailStatus(mailData)
-      enqueueLiveThreats(threatData)
+      if (filesData) setFileStatus(filesData)
+      ingestFromServer(threatData)
       setLastRefresh(new Date())
     } catch (err) {
       showToast(err.message || 'Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
-  }, [enqueueLiveThreats, showToast])
+  }, [ingestFromServer, showToast])
 
   const handleBellToggle = useCallback((nextOpen) => {
     setBellOpen(nextOpen)
@@ -189,26 +203,6 @@ function App() {
     const timer = window.setInterval(refresh, 3000)
     return () => window.clearInterval(timer)
   }, [refresh])
-
-  useEffect(() => {
-    let timeout
-    const tick = () => {
-      const next = revealQueue.current.shift()
-      if (next) {
-        setThreats((prev) => (prev.some((row) => row.id === next.id) ? prev : [next, ...prev]))
-        if (next.threat_type && next.threat_type !== 'benign') {
-          setUnreadCount((count) => count + 1)
-          setNotifications((prev) => [next, ...prev].slice(0, 20))
-          pushThreatPopups([next])
-        }
-        timeout = window.setTimeout(tick, 5500)
-        return
-      }
-      timeout = window.setTimeout(tick, 700)
-    }
-    timeout = window.setTimeout(tick, 800)
-    return () => window.clearTimeout(timeout)
-  }, [pushThreatPopups])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -457,6 +451,12 @@ function App() {
       />
       <SystemMetaRow health={health} monitor={monitor} lastRefresh={lastRefresh} />
       <ClientBanner agentStatus={agentStatus} />
+      {fileStatus ? (
+        <div className={`mail-watch-banner ${fileStatus.usb_drives?.length ? 'on' : ''}`}>
+          <span className="live-dot" />
+          {fileStatus.usb_message || 'USB watch starting…'}
+        </div>
+      ) : null}
 
       {tab === 'dashboard' ? (
         <>
@@ -610,6 +610,11 @@ function App() {
               <div>Last message: {sourceStatus?.last_message || monitor?.last_message || '—'}</div>
             </div>
           </div>
+          <FileGuardPanel
+            onToast={showToast}
+            onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+            fileStatus={fileStatus}
+          />
         </section>
       ) : null}
 
