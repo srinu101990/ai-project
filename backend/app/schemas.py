@@ -274,7 +274,7 @@ class MailImapConnectRequest(BaseModel):
     username: str = Field(..., min_length=3)
     password: str = Field(..., min_length=3)
     mailbox: Optional[str] = "INBOX"
-    interval_seconds: Optional[int] = Field(default=20, ge=15, le=600)
+    interval_seconds: Optional[int] = Field(default=20, ge=8, le=600)
 
 
 class MailImapStatus(BaseModel):

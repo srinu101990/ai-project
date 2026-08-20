@@ -89,11 +89,10 @@ export default function MailGuardPanel({ onToast, onChecked, onPolled, mailStatu
     setImapBusy(true)
     try {
       const status = await api.connectMailImap({
-        host: imapHost,
-        username: imapUser,
-        password: imapPass,
+        host: imapHost.trim(),
+        username: imapUser.trim(),
+        password: imapPass.replace(/\s+/g, ''),
         mailbox: 'INBOX',
-            interval_seconds: 12,
       })
       setImapStatus(status)
       if (status.last_phishing) {
@@ -229,7 +228,7 @@ export default function MailGuardPanel({ onToast, onChecked, onPolled, mailStatu
         <ol className="mail-steps">
           <li>Gmail: Settings → See all settings → Forwarding and POP/IMAP → Enable IMAP</li>
           <li>Google Account → Security → 2-Step Verification → App passwords → create one for Mail</li>
-          <li>Paste email + 16-character app password, then start watch</li>
+          <li>Paste email + 16-character app password (spaces are OK), then start watch</li>
         </ol>
         <form className="form" onSubmit={handleImapConnect}>
           <label>

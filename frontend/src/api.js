@@ -7,7 +7,13 @@ function errorMessage(raw, fallback) {
     if (typeof data.detail === 'string') return data.detail
     if (Array.isArray(data.detail)) {
       return data.detail
-        .map((item) => item.msg || item.message || JSON.stringify(item))
+        .map((item) => {
+          const msg = item.msg || item.message || JSON.stringify(item)
+          const field = Array.isArray(item.loc)
+            ? item.loc.filter((part) => part !== 'body' && part !== 'query').join('.')
+            : ''
+          return field ? `${field}: ${msg}` : msg
+        })
         .join('; ')
     }
   } catch {

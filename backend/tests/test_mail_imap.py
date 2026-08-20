@@ -49,6 +49,36 @@ class MailImapTests(unittest.TestCase):
         self.assertFalse(status["enabled"])
         self.assertIn("stopped", status["last_message"].lower())
 
+    def test_connect_schema_accepts_16_char_app_password(self) -> None:
+        from pydantic import ValidationError
+
+        from app.schemas import MailImapConnectRequest
+
+        req = MailImapConnectRequest(
+            host="imap.gmail.com",
+            username="you@gmail.com",
+            password="abcdefghijklmnop",
+        )
+        self.assertEqual(len(req.password), 16)
+        self.assertEqual(req.interval_seconds, 20)
+
+        # Older UI sent a 12s poll interval; that must not block Gmail login.
+        allowed = MailImapConnectRequest(
+            host="imap.gmail.com",
+            username="you@gmail.com",
+            password="abcd efgh ijkl mnop",
+            interval_seconds=12,
+        )
+        self.assertEqual(allowed.interval_seconds, 12)
+
+        with self.assertRaises(ValidationError):
+            MailImapConnectRequest(
+                host="imap.gmail.com",
+                username="you@gmail.com",
+                password="abcdefghijklmnop",
+                interval_seconds=2,
+            )
+
     def test_connect_returns_before_inbox_poll(self) -> None:
         monitor = MailInboxMonitor()
         fake = FakeImap("imap.gmail.com", IMAP_TIMEOUT_SECONDS)
