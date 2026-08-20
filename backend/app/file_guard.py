@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -172,29 +173,69 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def removable_roots() -> list[Path]:
-    """Windows USB / SD card drive letters that Windows actually mounted."""
+def _usb_letters_powershell() -> list[str]:
     if os.name != "nt":
         return []
+    script = (
+        "$ErrorActionPreference='SilentlyContinue'; "
+        "$out=@(); "
+        "Get-CimInstance Win32_LogicalDisk | Where-Object {$_.DriveType -eq 2} | "
+        "ForEach-Object { $out += $_.DeviceID }; "
+        "Get-Disk | Where-Object {$_.BusType -eq 'USB'} | ForEach-Object { "
+        "  Get-Partition -DiskNumber $_.Number | ForEach-Object { "
+        "    if ($_.DriveLetter) { $out += ($_.DriveLetter.ToString() + ':') } "
+        "  } "
+        "}; "
+        "($out | Select-Object -Unique) -join \"`n\""
+    )
     try:
-        import ctypes
-
-        kernel32 = ctypes.windll.kernel32
-        bitmask = int(kernel32.GetLogicalDrives())
-    except Exception:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=6,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
         return []
-    drive_removable = 2
-    roots: list[Path] = []
-    for index in range(26):
-        if not bitmask & (1 << index):
-            continue
-        letter = chr(ord("A") + index)
-        root = Path(f"{letter}:/")
+    letters: list[str] = []
+    for line in (completed.stdout or "").splitlines():
+        item = line.strip().upper().rstrip("\\/")
+        if len(item) >= 2 and item[0].isalpha() and item[1] == ":" and item[0] != "C":
+            letters.append(item[:2])
+    return letters
+
+
+def removable_roots() -> list[Path]:
+    """Windows USB / SD card drive letters that Windows actually mounted."""
+    letters: set[str] = set()
+    if os.name == "nt":
         try:
-            kind = int(kernel32.GetDriveTypeW(str(root)))
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            bitmask = int(kernel32.GetLogicalDrives())
+            drive_removable = 2
+            for index in range(26):
+                if not bitmask & (1 << index):
+                    continue
+                letter = chr(ord("A") + index)
+                if letter == "C":
+                    continue
+                root = Path(f"{letter}:/")
+                try:
+                    kind = int(kernel32.GetDriveTypeW(str(root)))
+                except Exception:
+                    continue
+                if kind == drive_removable:
+                    letters.add(f"{letter}:")
         except Exception:
-            continue
-        if kind == drive_removable and root.exists():
+            pass
+        letters.update(_usb_letters_powershell())
+    roots: list[Path] = []
+    for item in sorted(letters):
+        root = Path(f"{item}/")
+        if root.exists():
             roots.append(root)
     return roots
 
@@ -225,7 +266,7 @@ def _is_demo_drop(path: Path) -> bool:
 def default_watch_folders() -> list[Path]:
     """User profile, USB sticks, and file_drop — not this project's own source tree."""
     home = Path.home()
-    candidates = [DROP_DIR, home]
+    candidates = [*removable_roots(), DROP_DIR, home]
     onedrive = home / "OneDrive"
     if onedrive.is_dir():
         candidates.append(onedrive)
@@ -592,8 +633,8 @@ class FileFolderMonitor:
                 usb_message = "USB watching: " + " · ".join(usb)
             else:
                 usb_message = (
-                    "USB: none mounted. Plug a stick in and wait a few seconds. "
-                    "If this laptop has USB storage disabled, Windows will not show a drive letter."
+                    "USB: none mounted. Plug a stick into this laptop or the second laptop "
+                    "while the agent is running."
                 )
             return {
                 "enabled": self._running,

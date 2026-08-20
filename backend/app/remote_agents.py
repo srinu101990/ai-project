@@ -30,6 +30,7 @@ class RemoteAgentRegistry:
         username: str,
         events_collected: int,
         last_threat_type: str | None,
+        usb_drives: list[str] | None = None,
     ) -> None:
         key = f"{hostname}|{source_ip}"
         now = datetime.now(timezone.utc)
@@ -49,6 +50,7 @@ class RemoteAgentRegistry:
                     "last_seen": now,
                     "last_threat_type": last_threat_type,
                     "last_events": events_collected,
+                    "usb_drives": list(usb_drives or []),
                     "online": True,
                 }
             )
@@ -84,6 +86,7 @@ def ingest_agent_heartbeat(
     os_name: str,
     username: str,
     findings: list[dict[str, Any]],
+    usb_drives: list[str] | None = None,
 ) -> dict[str, Any]:
     """Classify remote-PC findings and store non-duplicate events."""
     host = (hostname or "unknown-pc").strip()[:80]
@@ -156,6 +159,7 @@ def ingest_agent_heartbeat(
         username=username or "unknown",
         events_collected=len(created),
         last_threat_type=last_type,
+        usb_drives=usb_drives or [],
     )
     return {
         "status": "ok",
@@ -165,3 +169,38 @@ def ingest_agent_heartbeat(
         "events": created,
         "message": f"Remote agent {host} ({ip}) reported {len(created)} finding(s)",
     }
+
+
+def merge_usb_into_file_status(status: dict[str, Any]) -> dict[str, Any]:
+    """Combine this-laptop USB mounts with sticks plugged into live remote agents."""
+    merged = dict(status or {})
+    local = [str(item) for item in (merged.get("usb_drives") or []) if item]
+    remote_rows: list[str] = []
+    snapshot = agent_registry.status()
+    for pc in snapshot.get("agents") or []:
+        if not pc.get("online"):
+            continue
+        host = str(pc.get("hostname") or "remote-pc")
+        for drive in pc.get("usb_drives") or []:
+            if not drive:
+                continue
+            remote_rows.append(f"{drive} on {host}")
+    if remote_rows:
+        local_labels = [f"{drive} (this laptop)" for drive in local]
+    else:
+        local_labels = list(local)
+    combined = local_labels + remote_rows
+    merged["usb_drives"] = combined
+    if combined:
+        merged["usb_message"] = "USB watching: " + " · ".join(combined)
+    elif int(snapshot.get("connected") or 0) > 0:
+        merged["usb_message"] = (
+            "USB: none mounted on this laptop or the live second laptop. "
+            "Plug a stick into either PC and keep the agent window open."
+        )
+    else:
+        merged["usb_message"] = (
+            "USB: none mounted. Plug a stick into this laptop, or into the second "
+            "laptop while sentinel_agent.py is running."
+        )
+    return merged

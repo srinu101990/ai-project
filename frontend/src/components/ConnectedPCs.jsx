@@ -43,7 +43,7 @@ export default function ConnectedPCs({ agentStatus, onToast }) {
         </span>
       </div>
       <p className="muted source-copy">
-        This dashboard scans the LAN in real time. To show mail and malware from{' '}
+        This dashboard scans the LAN in real time. To show mail, USB, and malware from{' '}
         <strong> another laptop</strong>, run the agent on that PC (same Wi-Fi). When you
         send a phishing mail or inject virus / worm / trojan / ransomware there, this
         screen pops up, the charts update, and the threat feed lists it as if the whole
@@ -134,6 +134,12 @@ export default function ConnectedPCs({ agentStatus, onToast }) {
               <div className="live-source-meta mono">
                 <div>IP: {pc.source_ip}</div>
                 <div>Last: {pc.last_threat_type || '—'}</div>
+                <div>
+                  USB:{' '}
+                  {(pc.usb_drives || []).length
+                    ? (pc.usb_drives || []).join(' · ')
+                    : 'none mounted'}
+                </div>
                 <div>{formatTime(pc.last_seen)}</div>
               </div>
             </article>

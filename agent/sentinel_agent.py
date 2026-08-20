@@ -150,6 +150,27 @@ LISTEN_HINTS = {
     14444: ("XMRig", "cryptominer"),
 }
 
+DOUBLE_EXT = re.compile(
+    r"\.(pdf|doc|docx|jpg|jpeg|png|txt|xls|xlsx|ppt|pptx)\.(exe|scr|bat|cmd|js|vbs|msi|com|pif)$",
+    re.I,
+)
+LURE_NAME = re.compile(
+    r"invoice|resume|payment|statement|\bcv\b|ticket|passport|salary|offer.?letter",
+    re.I,
+)
+DANGEROUS_EXTS = {
+    ".exe",
+    ".scr",
+    ".pif",
+    ".com",
+    ".cmd",
+    ".bat",
+    ".ps1",
+    ".vbs",
+    ".js",
+    ".msi",
+}
+
 FILE_NAME_HINTS = (
     (r"xmrig|minerd|cgminer|nicehash", "cryptominer"),
     (r"readme.*decrypt|how.?to.?decrypt|\.wncry$|\.lockbit$|\.locked$", "ransomware"),
@@ -162,7 +183,7 @@ FILE_NAME_HINTS = (
     (r"bundlore|adware|searchprotect", "adware"),
     (r"pegasus|stalkerware|webwatcher|mspy|spyware", "spyware"),
     (r"tdss|alureon|zeroaccess|rootkit", "rootkit"),
-    (r"expiro|file.?infector", "virus"),
+    (r"expiro|file.?infector|\bvirus\b|win32.?expiro", "virus"),
     (r"mirai|botnet", "botnet"),
     (r"mimikatz", "spyware"),
     (r"phish|verify.?account|paypa1", "phishing"),
@@ -330,8 +351,7 @@ MAX_SCAN_FILES = 1200
 MAX_SCAN_DEPTH = 8
 
 
-def removable_roots() -> list[Path]:
-    """Windows USB / SD card drive letters (not C:)."""
+def _usb_letters_ctypes() -> list[str]:
     if os.name != "nt":
         return []
     try:
@@ -340,29 +360,86 @@ def removable_roots() -> list[Path]:
     except Exception:
         return []
     drive_removable = 2
-    roots: list[Path] = []
+    letters: list[str] = []
     for index in range(26):
         if not bitmask & (1 << index):
             continue
         letter = chr(ord("A") + index)
+        if letter == "C":
+            continue
         root = Path(f"{letter}:/")
         try:
             kind = int(kernel32.GetDriveTypeW(str(root)))
         except Exception:
             continue
-        if kind == drive_removable and root.exists():
+        if kind == drive_removable:
+            letters.append(f"{letter}:")
+    return letters
+
+
+def _usb_letters_powershell() -> list[str]:
+    """Catch USB sticks and USB disks that Windows mounts as a normal drive."""
+    if os.name != "nt":
+        return []
+    script = (
+        "$ErrorActionPreference='SilentlyContinue'; "
+        "$out=@(); "
+        "Get-CimInstance Win32_LogicalDisk | Where-Object {$_.DriveType -eq 2} | "
+        "ForEach-Object { $out += $_.DeviceID }; "
+        "Get-Disk | Where-Object {$_.BusType -eq 'USB'} | ForEach-Object { "
+        "  Get-Partition -DiskNumber $_.Number | ForEach-Object { "
+        "    if ($_.DriveLetter) { $out += ($_.DriveLetter.ToString() + ':') } "
+        "  } "
+        "}; "
+        "($out | Select-Object -Unique) -join \"`n\""
+    )
+    raw = run(["powershell", "-NoProfile", "-Command", script], timeout=6.0)
+    letters: list[str] = []
+    for line in raw.splitlines():
+        item = line.strip().upper().rstrip("\\/")
+        if len(item) >= 2 and item[0].isalpha() and item[1] == ":" and item[0] != "C":
+            letters.append(item[:2])
+    return letters
+
+
+def removable_roots() -> list[Path]:
+    """Windows USB / SD card drive letters (not C:)."""
+    letters = set(_usb_letters_ctypes())
+    letters.update(_usb_letters_powershell())
+    roots: list[Path] = []
+    for item in sorted(letters):
+        root = Path(f"{item}/")
+        if root.exists():
             roots.append(root)
     return roots
 
 
-def watch_roots() -> list[Path]:
-    """User profile (all folders) plus USB sticks and demo drop folders."""
+def usb_drive_labels() -> list[str]:
+    return [str(path) for path in removable_roots()]
+
+
+def guess_file_family(name: str, text: str = "") -> str | None:
+    """Name/content heuristics used on USB sticks and watched folders."""
+    blob = f"{name}\n{text or ''}"
+    for pattern, hint in FILE_NAME_HINTS:
+        if re.search(pattern, blob, re.I):
+            return hint
+    if DOUBLE_EXT.search(name):
+        return "downloader"
+    suffix = Path(name).suffix.lower()
+    if suffix in DANGEROUS_EXTS and LURE_NAME.search(name):
+        return "trojan"
+    return None
+
+
+def watch_roots(*, include_usb: bool = True) -> list[Path]:
+    """User profile plus optional USB sticks and demo drop folders."""
     home = Path.home()
-    candidates = [DROP_MAIL, DROP_FILES, home]
+    usb = removable_roots() if include_usb else []
+    candidates = [*usb, DROP_MAIL, DROP_FILES, home]
     onedrive = home / "OneDrive"
     if onedrive.is_dir():
         candidates.append(onedrive)
-    candidates.extend(removable_roots())
     seen: set[str] = set()
     roots: list[Path] = []
     for path in candidates:
@@ -382,8 +459,26 @@ def watch_roots() -> list[Path]:
     return roots
 
 
-def iter_scan_files(roots: list[Path]) -> list[Path]:
-    """Walk every remaining user/USB folder, skipping OS/cache trees."""
+def _usb_root_keys() -> set[str]:
+    keys: set[str] = set()
+    for path in removable_roots():
+        try:
+            keys.add(str(path.resolve()).lower())
+        except OSError:
+            keys.add(str(path).lower())
+    return keys
+
+
+def _is_on_usb(path: Path, usb_keys: set[str]) -> bool:
+    try:
+        resolved = str(path.resolve()).lower()
+    except OSError:
+        resolved = str(path).lower()
+    return any(resolved == key or resolved.startswith(key.rstrip("\\/") + os.sep) or resolved.startswith(key) for key in usb_keys)
+
+
+def iter_scan_files(roots: list[Path], *, limit: int = MAX_SCAN_FILES) -> list[Path]:
+    """Walk watched folders, skipping OS/cache trees."""
     found: list[Path] = []
     for root in roots:
         if not root.is_dir():
@@ -417,65 +512,86 @@ def iter_scan_files(roots: list[Path]) -> list[Path]:
                 if name.startswith("."):
                     continue
                 found.append(current / name)
-                if len(found) >= MAX_SCAN_FILES:
+                if len(found) >= limit:
                     return found
     return found
 
 
-def scan_files(hostname: str, ip: str, seen: list[str]) -> list[dict]:
-    findings: list[dict] = []
-    for path in iter_scan_files(watch_roots()):
-        if not path.is_file():
-            continue
-        key = f"file:{path}"
-        if key in seen:
-            continue
-        name = path.name.lower()
-        family = None
-        for pattern, hint in FILE_NAME_HINTS:
-            if re.search(pattern, name, re.I):
-                family = hint
-                break
-        text = ""
-        if path.suffix.lower() in {".eml", ".txt", ".msg", ".html"}:
-            try:
-                raw = path.read_bytes()[:8000]
-            except OSError:
-                continue
-            if path.suffix.lower() == ".eml":
-                sender, subject, body = _message_text(email.message_from_bytes(raw))
-                text = _mail_payload(sender, subject, body)
-                if not family and any(hint in text.lower() for hint in PHISH_HINTS):
-                    family = "phishing"
-            else:
-                text = raw.decode(errors="replace")
-                if not family and any(hint in text.lower() for hint in PHISH_HINTS):
-                    family = "phishing"
-                if not family:
-                    for pattern, hint in FILE_NAME_HINTS:
-                        if re.search(pattern, text, re.I):
-                            family = hint
-                            break
-        if not family:
-            continue
-        protocol = "SMTP" if family == "phishing" else "FILE"
+def _file_finding(path: Path, hostname: str, ip: str, family: str, text: str, *, on_usb: bool) -> dict:
+    protocol = "SMTP" if family == "phishing" else "FILE"
+    drive = str(path.anchor or path.parent)
+    if on_usb:
+        blob = (
+            f"USB stick on second laptop {hostname} ({ip}) has {family} in {path.name} "
+            f"on removable drive {drive}."
+        )
+        catalog_row = INJECT_CATALOG.get(family)
+        if catalog_row:
+            blob = f"{blob} {catalog_row[1]}"
+        if text:
+            blob = f"{blob} {text[:600]}"
+        indicators = [f"usb:{drive}", f"file:{path.name}", family, "remote-agent-usb", hostname]
+    else:
         blob = text or (
             f"Remote agent on {hostname} ({ip}) found {family} artifact {path.name} "
             f"in {path.parent}."
         )
-        if family == "phishing" and "urgent action" not in blob.lower():
-            blob = (
-                f"{blob} Urgent action required: verify your account and click the "
-                "login portal."
-            )
-        findings.append(
-            _finding(
-                protocol,
-                blob,
-                [f"file:{path.name}", family, "remote-agent", hostname],
-                key=f"file:{path}",
-            )
+        indicators = [f"file:{path.name}", family, "remote-agent", hostname]
+    if family == "phishing" and "urgent action" not in blob.lower():
+        blob = (
+            f"{blob} Urgent action required: verify your account and click the "
+            "login portal."
         )
+    return _finding(protocol, blob, indicators, key=f"file:{path}")
+
+
+def _inspect_file(path: Path, hostname: str, ip: str, seen: list[str], *, on_usb: bool) -> dict | None:
+    if not path.is_file():
+        return None
+    key = f"file:{path}"
+    if key in seen:
+        return None
+    name = path.name
+    text = ""
+    suffix = path.suffix.lower()
+    if suffix in {".eml", ".txt", ".msg", ".html", ".htm"}:
+        try:
+            raw = path.read_bytes()[:8000]
+        except OSError:
+            return None
+        if suffix == ".eml":
+            sender, subject, body = _message_text(email.message_from_bytes(raw))
+            text = _mail_payload(sender, subject, body)
+        else:
+            text = raw.decode(errors="replace")
+    family = guess_file_family(name, text)
+    if not family and text and any(hint in text.lower() for hint in PHISH_HINTS):
+        family = "phishing"
+    if not family:
+        return None
+    return _file_finding(path, hostname, ip, family, text, on_usb=on_usb)
+
+
+def scan_usb_files(hostname: str, ip: str, seen: list[str]) -> list[dict]:
+    """Always scan plugged-in USB sticks first, before the user profile."""
+    findings: list[dict] = []
+    for path in iter_scan_files(removable_roots(), limit=400):
+        row = _inspect_file(path, hostname, ip, seen, on_usb=True)
+        if row:
+            findings.append(row)
+    return findings
+
+
+def scan_files(hostname: str, ip: str, seen: list[str]) -> list[dict]:
+    findings: list[dict] = []
+    usb_keys = _usb_root_keys()
+    roots = [path for path in watch_roots(include_usb=False)]
+    for path in iter_scan_files(roots):
+        if _is_on_usb(path, usb_keys):
+            continue
+        row = _inspect_file(path, hostname, ip, seen, on_usb=False)
+        if row:
+            findings.append(row)
     return findings
 
 
@@ -661,6 +777,7 @@ def send_report(url: str, hostname: str, ip: str, findings: list[dict]) -> dict:
         "source_ip": ip,
         "os_name": f"{platform.system()} {platform.release()}",
         "username": os.environ.get("USERNAME") or os.environ.get("USER") or "unknown",
+        "usb_drives": usb_drive_labels(),
         "findings": cleaned,
     }
     return post_json(url, payload)
@@ -676,8 +793,9 @@ def collect_live(
     outlook: bool,
     seen: list[str],
 ) -> list[dict]:
-    findings = scan_processes(hostname, ip)
+    findings = scan_usb_files(hostname, ip, seen)
     findings.extend(scan_files(hostname, ip, seen))
+    findings.extend(scan_processes(hostname, ip))
     if mail_user and mail_pass:
         try:
             findings.extend(scan_imap(mail_user, mail_pass, mail_host, seen))
@@ -791,13 +909,15 @@ def main() -> int:
     DROP_FILES.mkdir(parents=True, exist_ok=True)
     seen: list[str] = _read_json(SEEN_PATH, [])
     print(f"Live watch every {args.interval}s. Ctrl+C to stop.")
-    print("Scanning all user folders + USB (not only Desktop/Downloads/Documents).")
+    print("Scanning USB sticks first, then user folders (not only Desktop/Downloads/Documents).")
     print("Skipping AppData, Windows, and cache folders so the watch stays fast.")
-    usb = removable_roots()
+    last_usb: list[str] = []
+    usb = usb_drive_labels()
     if usb:
-        print("USB watch: " + ", ".join(str(path) for path in usb))
+        print("USB watch: " + ", ".join(usb))
+        last_usb = usb
     else:
-        print("USB watch: none plugged in yet.")
+        print("USB watch: none plugged in yet. Plug a stick into THIS laptop.")
     print(f"Drop a phishing .eml into: {DROP_MAIL}")
     print(f"Sample mail/malware files: {AGENT_DIR / 'demo_samples'}")
     print(f"Or inject from another window: python sentinel_agent.py --server {server} --inject phishing")
@@ -808,6 +928,13 @@ def main() -> int:
 
     while True:
         try:
+            usb = usb_drive_labels()
+            if usb != last_usb:
+                if usb:
+                    print(f"USB plugged in: {', '.join(usb)}")
+                else:
+                    print("USB removed. Waiting for another stick.")
+                last_usb = usb
             findings = collect_live(
                 hostname,
                 ip,
@@ -822,7 +949,8 @@ def main() -> int:
             accepted = result.get("events_collected", result.get("accepted", "?"))
             print(
                 f"[{time.strftime('%H:%M:%S')}] {len(findings)} finding(s) scanned, "
-                f"dashboard stored {accepted} new. Client {hostname} ({ip}) is online."
+                f"dashboard stored {accepted} new. Client {hostname} ({ip}) is online. "
+                f"USB: {', '.join(usb) if usb else 'none mounted'}."
             )
         except urllib.error.URLError as exc:
             print(f"[{time.strftime('%H:%M:%S')}] cannot reach dashboard: {exc}")

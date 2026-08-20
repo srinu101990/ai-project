@@ -41,6 +41,7 @@ if not defined PY (
 )
 echo Using: %PY%
 echo Starting live watch against %SERVER%
+echo USB sticks plugged into THIS laptop are sent to the main dashboard.
 echo Leave that new window OPEN. You should see "Starting CYBER_SENTINEL agent..."
 echo Then use this menu to inject phishing / malware one by one.
 echo.

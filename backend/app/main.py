@@ -38,7 +38,7 @@ from .models import ThreatEvent
 from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
 from .network_scanner import _local_ipv4, list_local_ipv4s
-from .remote_agents import agent_registry, ingest_agent_heartbeat
+from .remote_agents import agent_registry, ingest_agent_heartbeat, merge_usb_into_file_status
 from .report import (
     build_report_summary,
     filters_from_params,
@@ -306,6 +306,7 @@ def remote_agent_heartbeat(
         os_name=payload.os_name or "unknown",
         username=payload.username or "unknown",
         findings=[item.model_dump() for item in payload.findings],
+        usb_drives=list(payload.usb_drives or []),
     )
     return result
 
@@ -458,26 +459,26 @@ def mail_outlook_stop():
 
 @app.get("/api/files/status", response_model=FileWatchStatus)
 def files_status():
-    return file_monitor.status()
+    return merge_usb_into_file_status(file_monitor.status())
 
 
 @app.post("/api/files/start", response_model=FileWatchStatus)
 def files_start():
     """Start watching Downloads, Desktop, Documents, and file_drop/."""
-    return file_monitor.start(interval_seconds=8, persist=True)
+    return merge_usb_into_file_status(file_monitor.start(interval_seconds=8, persist=True))
 
 
 @app.post("/api/files/scan", response_model=FileWatchStatus)
 def files_scan():
     try:
-        return file_monitor.scan_once()
+        return merge_usb_into_file_status(file_monitor.scan_once())
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/files/stop", response_model=FileWatchStatus)
 def files_stop():
-    return file_monitor.stop(forget=True)
+    return merge_usb_into_file_status(file_monitor.stop(forget=True))
 
 
 @app.post("/api/files/upload", response_model=FileCheckResponse)

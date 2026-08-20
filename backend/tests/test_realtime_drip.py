@@ -49,7 +49,7 @@ class AgentDripTests(unittest.TestCase):
         second_hit = agent._finding("PROCESS", "worm b", ["b"], key="proc-b")
         with patch.object(agent, "scan_processes", return_value=[first_hit, second_hit]), patch.object(
             agent, "scan_files", return_value=[]
-        ):
+        ), patch.object(agent, "scan_usb_files", return_value=[]):
             seen: list[str] = []
             first = agent.collect_live(
                 "PC",

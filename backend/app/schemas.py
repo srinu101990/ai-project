@@ -204,6 +204,7 @@ class AgentHeartbeatRequest(BaseModel):
     source_ip: str = Field(..., min_length=3, max_length=64)
     os_name: Optional[str] = "unknown"
     username: Optional[str] = "unknown"
+    usb_drives: list[str] = Field(default_factory=list)
     findings: list[AgentFindingIn] = Field(default_factory=list)
 
 
@@ -218,6 +219,7 @@ class RemoteAgentOut(BaseModel):
     last_threat_type: Optional[str] = None
     last_seen: Optional[datetime] = None
     first_seen: Optional[datetime] = None
+    usb_drives: list[str] = Field(default_factory=list)
 
 
 class RemoteAgentStatus(BaseModel):

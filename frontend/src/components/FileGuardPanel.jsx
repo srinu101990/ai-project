@@ -67,15 +67,18 @@ export default function FileGuardPanel({ onToast, onChecked, fileStatus }) {
         <span>{watching ? 'LIVE — new files are being checked' : 'Folder watch is off'}</span>
       </div>
       <p className="muted source-copy">
-        This laptop watches Downloads, Desktop, Documents, USB sticks, and the project{' '}
-        <code>file_drop/</code> folder. It does not scan this project&apos;s own README or demo
-        sample files, so those will not spam popups. Suspicious names on a USB stick
-        (invoice.pdf.exe, README_FOR_DECRYPT) are classified one at a time.
+        This laptop and any live second-laptop agent watch Downloads, Desktop, Documents,
+        USB sticks, and <code>file_drop/</code>. Suspicious names on a USB stick
+        (virus.exe, invoice.pdf.exe, README_FOR_DECRYPT) are classified one at a time.
       </p>
       <ol className="mail-steps">
         <li>Leave folder watch on (it starts with the app)</li>
-        <li>Plug a USB stick — it should appear in the USB list below if Windows mounts it</li>
-        <li>A popup appears only for a new suspicious file, not for this project folder</li>
+        <li>
+          Plug a USB stick into this laptop, or into the second laptop while{' '}
+          <code>sentinel_agent.py</code> stays open
+        </li>
+        <li>The USB line below should list the drive from that PC within a few seconds</li>
+        <li>A popup appears for a new suspicious file on that stick</li>
       </ol>
 
       <div className={`mail-watch-banner ${watching ? 'on' : ''}`}>
