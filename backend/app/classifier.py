@@ -42,6 +42,13 @@ PHISHING_PATTERNS = [
     (r"shared\s+(a\s+)?document\s+with\s+you", "fake document share"),
     (r"(dhl|fedex|ups|courier).{0,40}(delivery|parcel|held)", "delivery phishing"),
     (r"bit\.ly|tinyurl\.com|t\.co/", "shortened link"),
+    (r"mandatory.{0,80}(benefits|election|enrollment)", "mandatory benefits election"),
+    (r"employee.{0,40}(health\s+)?benefits", "employee benefits lure"),
+    (r"health\s+(insurance|benefits)", "health insurance lure"),
+    (r"re-?enroll", "re-enrollment pressure"),
+    (r"lapse in (medical|coverage|benefits)", "coverage-lapse threat"),
+    (r"deadline.{0,40}(friday|submission|5:00)", "hard deadline pressure"),
+    (r"hello\s+team", "generic hello-team greeting"),
 ]
 
 VIRUS_PATTERNS = [
@@ -281,6 +288,11 @@ def _training_corpus() -> tuple[list[str], list[str]]:
         ("Urgent action required: verify your account and click the login portal link", "phishing"),
         ("Your password expired. Reset credentials via the bank account login page", "phishing"),
         ("Credential harvest attempt via fake password reset email", "phishing"),
+        (
+            "Action Required: Mandatory 2026 Employee Health Benefits Election. "
+            "Hello Team, re-enroll to avoid a lapse in medical coverage. Deadline Friday 5:00 PM EST.",
+            "phishing",
+        ),
         (
             "File infector virus Win32/Expiro detected sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
             "virus",

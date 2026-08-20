@@ -211,6 +211,10 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
         </button>
       </div>
       <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
+        After you send a test phishing mail, click <strong>Check inbox now</strong>. Do not wait
+        on “N remaining in the stream” — that is older mail draining one by one.
+      </p>
+      <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
         {outlookInstalled
           ? 'Classic Outlook was found on this PC. Open Outlook, stay signed in, then click the button. If Windows asks to allow access, click Allow.'
           : 'Classic Outlook was not found. The new Outlook Store app and Gmail-in-Chrome cannot be read. Use Gmail App Password below, or install classic Outlook.'}

@@ -176,8 +176,34 @@ class MailVerdict:
 def evaluate_mail(sender: str, subject: str, body: str) -> MailVerdict:
     payload = compose_payload(sender, subject, body)
     result = classifier.classify(payload)
-    phishing = result.threat_type in {"phishing", "social"}
-    threat_type = "phishing" if phishing else result.threat_type
+    blob = f"{sender}\n{subject}\n{body}".lower()
+    extra: list[str] = []
+    personal_webmail = bool(
+        re.search(r"@(gmail|googlemail|yahoo|outlook|hotmail|aol)\.com", sender or "", re.I)
+    )
+    if re.search(r"action\s+required", blob):
+        extra.append("action-required lure")
+    if re.search(r"mandatory.{0,80}(benefits|election|enrollment)", blob):
+        extra.append("mandatory benefits election")
+    if re.search(r"health\s+(insurance|benefits)|employee.{0,40}benefits", blob):
+        extra.append("employee health-benefits lure")
+    if re.search(r"re-?enroll|lapse in (medical|coverage|benefits)", blob):
+        extra.append("coverage lapse / re-enroll pressure")
+    if re.search(r"deadline.{0,40}(friday|submission|5:00)", blob):
+        extra.append("hard deadline pressure")
+    if personal_webmail and extra:
+        extra.append("corporate HR mail from a personal webmail address")
+
+    # Mail tab: HR / benefits lures from Gmail must pop even if ML is unsure.
+    mail_phishing = result.threat_type in {"phishing", "social"} or (
+        personal_webmail and len(extra) >= 2
+    ) or (len(extra) >= 3)
+    threat_type = "phishing" if mail_phishing else result.threat_type
+    phishing = threat_type == "phishing"
+    indicators = list(result.indicators or [])
+    for item in extra:
+        if item not in indicators:
+            indicators.append(item)
     verdict = (
         "PHISHING DETECTED"
         if phishing
@@ -185,12 +211,15 @@ def evaluate_mail(sender: str, subject: str, body: str) -> MailVerdict:
         if threat_type == "benign"
         else f"FLAGGED AS {threat_type.upper()}"
     )
+    confidence = result.confidence
+    if phishing:
+        confidence = max(confidence, 0.86)
     return MailVerdict(
         phishing=phishing,
         threat_type=threat_type,
         severity="medium" if phishing else result.severity,
-        confidence=max(result.confidence, 0.82 if phishing else result.confidence),
-        indicators=list(result.indicators or []),
+        confidence=confidence,
+        indicators=indicators[:10],
         verdict=verdict,
         sender=sender,
         subject=subject,
