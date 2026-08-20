@@ -547,6 +547,7 @@ function App() {
           <MailGuardPanel
             onToast={showToast}
             onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+            onPolled={refresh}
             mailStatus={mailStatus}
           />
           <RemediationPanel threatType={classifiedType} context="mail" />

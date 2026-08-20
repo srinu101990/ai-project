@@ -404,12 +404,15 @@ def mail_imap_connect(payload: MailImapConnectRequest):
 
 @app.post("/api/mail/imap/poll", response_model=MailImapStatus)
 def mail_imap_poll():
+    """Check inbox now — always read Gmail IMAP when it is connected."""
     try:
+        if mail_monitor.status().get("enabled"):
+            status = mail_monitor.poll_once(force=True)
+            return {**status, "channel": "imap", "outlook_installed": outlook_installed()}
         if outlook_monitor.status().get("enabled"):
             status = outlook_monitor.poll_once()
             return {**status, "channel": "outlook", "outlook_installed": True}
-        status = mail_monitor.poll_once(force=True)
-        return {**status, "channel": "imap", "outlook_installed": outlook_installed()}
+        raise RuntimeError("Inbox watch is not connected. Connect Gmail or start Outlook watch first.")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

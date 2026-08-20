@@ -452,51 +452,63 @@ class MailInboxMonitor:
         with self._lock:
             host, user, password, mailbox = self._host, self._username, self._password, self._mailbox
             self._polling = True
+            if force:
+                # Drop the old one-by-one backlog so the mail you just sent is next.
+                self._drip_ids = []
         if not host or not user or not password:
             raise RuntimeError("Inbox watch is not connected")
         db = SessionLocal()
         created = 0
         phishing_hits = 0
-        fetched = 0
         client = None
+        last_subject = ""
+        last_sender = ""
+        last_verdict = ""
+        inbox_count = 0
         try:
             client = _open_imap(host)
             client.login(user, password)
             typ, _ = client.select(mailbox, readonly=True)
             if typ != "OK":
                 raise RuntimeError(f"Cannot open mailbox {mailbox}")
-            _typ, data = client.search(None, "UNSEEN")
-            ids = list(data[0].split()) if data and data[0] else []
+            _typ, unseen_data = client.search(None, "UNSEEN")
+            unseen = list(unseen_data[0].split()) if unseen_data and unseen_data[0] else []
             _typ, all_data = client.search(None, "ALL")
-            recent = list(all_data[0].split())[-25:] if all_data and all_data[0] else []
-            merged: list[bytes] = []
-            for item in recent + ids:
-                if item not in merged:
-                    merged.append(item)
-            ids = merged[-25:]
+            all_ids = list(all_data[0].split()) if all_data and all_data[0] else []
+            inbox_count = len(all_ids)
+            newest_unseen = list(reversed(unseen))
+            newest_all = list(reversed(all_ids[-25:]))
             persisted = _read_json(SEEN_PATH, [])
-            newest_first = list(reversed(ids))
+
+            def _key(msg_id: bytes) -> str:
+                return f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
+
             pending: list[bytes] = []
-            dripping: set[bytes] = set()
-            with self._lock:
-                dripping = set(self._drip_ids)
-            for msg_id in newest_first:
-                key = f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
-                if msg_id in dripping:
-                    continue
-                if not force and key in persisted:
-                    continue
-                pending.append(msg_id)
+            for msg_id in newest_unseen:
+                if _key(msg_id) not in persisted and msg_id not in pending:
+                    pending.append(msg_id)
+            if force and not pending:
+                for msg_id in newest_unseen:
+                    if msg_id not in pending:
+                        pending.append(msg_id)
+            if not pending:
+                for msg_id in newest_all:
+                    if _key(msg_id) not in persisted and msg_id not in pending:
+                        pending.append(msg_id)
+            if force and not pending and newest_all:
+                pending = newest_all[:1]
+
             work = pending[:1]
-            leftover = pending[1:]
+            leftover = [item for item in pending[1:] if _key(item) not in persisted][:8]
+            stored = None
             for msg_id in work:
-                key = f"imap:{host}:{user}:{msg_id.decode(errors='replace')}"
-                fetched += 1
                 _typ, raw = client.fetch(msg_id, "(BODY.PEEK[])")
                 blob = _imap_fetch_bytes(raw)
                 if not blob:
                     continue
                 sender, subject, body = parse_eml_bytes(blob)
+                last_sender = sender
+                last_subject = subject
                 stored = check_and_store(
                     db,
                     sender=sender,
@@ -504,38 +516,43 @@ class MailInboxMonitor:
                     body=body or subject or "(empty message)",
                     origin=f"imap:{mailbox}",
                 )
+                last_verdict = str(stored.get("verdict") or stored.get("threat_type") or "")
                 if stored.get("phishing"):
                     phishing_hits += 1
+                key = _key(msg_id)
                 if key not in persisted:
                     persisted.append(key)
                 created += 1
             _write_json(SEEN_PATH, persisted[-800:])
             if leftover:
                 with self._lock:
-                    queued = set(self._drip_ids)
-                    for item in leftover:
-                        if item not in queued:
-                            self._drip_ids.append(item)
+                    self._drip_ids = leftover
                 self._start_mail_drip()
             try:
                 client.logout()
             except Exception:
                 pass
             client = None
-            waiting = len(leftover)
+            short_subj = (last_subject or "(no subject)")[:90]
+            short_from = (last_sender or "unknown")[:70]
             if phishing_hits:
-                message = (
-                    f"PHISHING DETECTED in {phishing_hits} mail(s) for {user}. "
-                    f"Streaming live — 1 shown now"
-                    + (f", {waiting} more one by one." if waiting else ".")
-                )
+                message = f'PHISHING DETECTED — "{short_subj}" from {short_from}'
             elif created:
                 message = (
-                    f"Inbox {user}: live stream started, 1 message classified now"
-                    + (f", {waiting} more will appear one by one." if waiting else ".")
+                    f'Checked newest INBOX mail — "{short_subj}" from {short_from} '
+                    f"→ {last_verdict or 'classified'}. "
+                    f"Inbox has {inbox_count} message(s)."
+                )
+            elif inbox_count:
+                message = (
+                    f"Inbox {user} has {inbox_count} message(s) but none were new. "
+                    "Click Check inbox now after you send the test mail."
                 )
             else:
-                message = f"Inbox {user}: 0 messages in INBOX (check IMAP is on and this is the right mailbox)"
+                message = (
+                    f"Inbox {user}: IMAP INBOX is empty. Confirm the mail is in Inbox "
+                    "(not Spam) and IMAP is on."
+                )
             with self._lock:
                 self._cycles += 1
                 self._last_events = created
@@ -584,7 +601,7 @@ class MailInboxMonitor:
                     return
                 msg_id = self._drip_ids.pop(0)
                 host, user, password, mailbox = self._host, self._username, self._password, self._mailbox
-            if self._stop.wait(7.0):
+            if self._stop.wait(3.0):
                 return
             db = SessionLocal()
             client = None
@@ -619,13 +636,14 @@ class MailInboxMonitor:
                         self._last_phishing = 1
                         self._total_phishing += 1
                         self._last_message = (
-                            f"PHISHING DETECTED for {user}. "
-                            f"{left} more mail(s) still streaming one by one."
+                            f'PHISHING DETECTED — "{(subject or "")[:80]}" from {(sender or "")[:60]}'
+                            + (f" · {left} more in stream" if left else "")
                         )
                     else:
                         self._last_message = (
-                            f"Inbox {user}: next mail classified live. "
-                            f"{left} remaining in the stream."
+                            f'Checked "{(subject or "")[:80]}" from {(sender or "")[:60]} '
+                            f"→ {stored.get('verdict') or stored.get('threat_type')}"
+                            + (f" · {left} more in stream" if left else "")
                         )
                     self._last_at = datetime.now(timezone.utc)
             except Exception:
@@ -639,7 +657,7 @@ class MailInboxMonitor:
                 db.close()
 
     def _loop(self) -> None:
-        if self._stop.wait(5.0):
+        if self._stop.wait(2.0):
             return
         while not self._stop.is_set():
             try:

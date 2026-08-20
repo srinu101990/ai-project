@@ -18,7 +18,7 @@ const SAMPLE_SAFE = {
     'Hi team, the weekly notes are in the shared drive. No password reset is required. See you in the standup tomorrow.',
 }
 
-export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
+export default function MailGuardPanel({ onToast, onChecked, onPolled, mailStatus }) {
   const [sender, setSender] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -93,7 +93,7 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
         username: imapUser,
         password: imapPass,
         mailbox: 'INBOX',
-        interval_seconds: 20,
+            interval_seconds: 12,
       })
       setImapStatus(status)
       if (status.last_phishing) {
@@ -118,10 +118,9 @@ export default function MailGuardPanel({ onToast, onChecked, mailStatus }) {
       setImapStatus(status)
       if (status.last_phishing) {
         onChecked?.({ threat_type: 'phishing' })
-        onToast?.(`PHISHING DETECTED in ${status.last_phishing} mail(s)`)
-      } else {
-        onToast?.(status.message || status.last_message || 'Inbox checked')
       }
+      onToast?.(status.message || status.last_message || 'Inbox checked')
+      onPolled?.()
     } catch (err) {
       onToast?.(err.message || 'Inbox poll failed')
     } finally {
