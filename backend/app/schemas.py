@@ -82,6 +82,17 @@ class StatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(open|investigating|contained|resolved)$")
 
 
+class ReportLatestEvent(BaseModel):
+    id: int
+    created_at: Optional[datetime] = None
+    threat_type: str
+    severity: str
+    source: str
+    source_ip: str
+    status: str
+    confidence: float = 0.0
+
+
 class ReportSummary(BaseModel):
     generated_at: datetime
     total_threats: int
@@ -92,6 +103,12 @@ class ReportSummary(BaseModel):
     recommendations: list[str]
     by_type: dict[str, int]
     by_severity: dict[str, int]
+    by_source: dict[str, int] = Field(default_factory=dict)
+    by_device: dict[str, int] = Field(default_factory=dict)
+    latest_events: list[ReportLatestEvent] = Field(default_factory=list)
+    filter_label: str = "Total / All Reports"
+    match_count: int = 0
+    empty_message: Optional[str] = None
 
 
 class MonitorStatus(BaseModel):

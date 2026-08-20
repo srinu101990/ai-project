@@ -3,6 +3,7 @@ import NotificationBell from './NotificationBell'
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'threats', label: 'Threat Intelligence' },
+  { id: 'known', label: 'Known Virus' },
   { id: 'analyzer', label: 'AI Analyzer' },
   { id: 'reports', label: 'Reports' },
   { id: 'sources', label: 'Sources' },

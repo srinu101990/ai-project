@@ -151,7 +151,7 @@ function App() {
         mailData,
         filesData,
       ] = await Promise.all([
-          api.getThreats({ limit: 40 }),
+          api.getThreats({ limit: 200 }),
           api.reportSummary(),
           api.health().catch(() => null),
           api.monitorStatus().catch(() => null),
@@ -203,6 +203,12 @@ function App() {
     const timer = window.setInterval(refresh, 3000)
     return () => window.clearInterval(timer)
   }, [refresh])
+
+  useEffect(() => {
+    if (tab !== 'reports') return undefined
+    refresh()
+    return undefined
+  }, [tab, refresh])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -353,13 +359,15 @@ function App() {
     }
   }
 
-  async function handleDownload() {
+  async function handleDownload(filters = {}) {
     setDownloading(true)
     try {
-      await api.downloadReport()
+      await api.downloadReport(filters)
       showToast('PDF report downloaded')
+      return true
     } catch (err) {
       showToast(err.message || 'Report download failed')
+      return false
     } finally {
       setDownloading(false)
     }
@@ -514,7 +522,6 @@ function App() {
             </article>
           </section>
 
-          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
           <LiveSourcesPanel
             sourceStatus={sourceStatus}
             onSweep={handleSweepSources}
@@ -538,19 +545,23 @@ function App() {
               onOpen={setDetailThreat}
             />
           </div>
+        </section>
+      ) : null}
+
+      {tab === 'known' ? (
+        <section className="threats-page">
           <ThreatDefinitions />
         </section>
       ) : null}
 
       {tab === 'mail' ? (
-        <section className="page-grid">
+        <section className="page-grid single">
           <MailGuardPanel
             onToast={showToast}
             onChecked={(data) => setClassifiedType(data?.threat_type || null)}
             onPolled={refresh}
             mailStatus={mailStatus}
           />
-          <RemediationPanel threatType={classifiedType} context="mail" />
         </section>
       ) : null}
 
@@ -630,7 +641,7 @@ function App() {
       ) : null}
 
       {tab === 'reports' ? (
-        <section className="page-grid">
+        <section className="page-grid reports-page">
           <ReportPanel
             summary={summary}
             onDownload={handleDownload}
@@ -644,11 +655,11 @@ function App() {
             <div className="snapshot-grid">
               <div>
                 <div className="stat-label">Open cases</div>
-                <div className="stat-value">{stats?.open_threats ?? '—'}</div>
+                <div className="stat-value">{summary?.open_threats ?? stats?.open_threats ?? '—'}</div>
               </div>
               <div>
                 <div className="stat-label">High severity</div>
-                <div className="stat-value">{stats?.by_severity?.high ?? 0}</div>
+                <div className="stat-value">{summary?.high_count ?? stats?.by_severity?.high ?? 0}</div>
               </div>
               <div>
                 <div className="stat-label">Monitor cycles</div>

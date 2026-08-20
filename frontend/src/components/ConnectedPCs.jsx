@@ -36,7 +36,7 @@ export default function ConnectedPCs({ agentStatus, onToast }) {
   return (
     <section className="panel section connected-pcs-panel">
       <div className="section-head">
-        <h3>Second laptop — live demo</h3>
+        <h3>Laptop live demo</h3>
         <span>
           {agentStatus?.connected ?? 0} remote PC
           {(agentStatus?.connected ?? 0) === 1 ? '' : 's'} online

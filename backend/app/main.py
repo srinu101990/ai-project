@@ -7,6 +7,7 @@ bundled Swagger assets, and optional serving of the built React frontend.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import date as date_type
 from pathlib import Path
 import threading
 
@@ -38,7 +39,12 @@ from .monitor import autostart_monitor, monitor
 from .multi_source import source_hub
 from .network_scanner import _local_ipv4, list_local_ipv4s
 from .remote_agents import agent_registry, ingest_agent_heartbeat
-from .report import build_report_summary, generate_pdf_report, get_stats
+from .report import (
+    build_report_summary,
+    filters_from_params,
+    generate_pdf_report,
+    get_stats,
+)
 from .schemas import (
     AgentHeartbeatRequest,
     AgentHeartbeatResponse,
@@ -683,14 +689,48 @@ def stats(db: Session = Depends(get_db)):
     return get_stats(db)
 
 
+def _report_query_filters(
+    on_date: date_type | None = Query(default=None, alias="date"),
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+    severity: str | None = None,
+    threat_type: str | None = None,
+    source: str | None = None,
+    source_ip: str | None = None,
+):
+    return filters_from_params(
+        on_date=on_date,
+        date_from=date_from,
+        date_to=date_to,
+        severity=severity,
+        threat_type=threat_type,
+        source=source,
+        source_ip=source_ip,
+    )
+
+
 @app.get("/api/reports/summary", response_model=ReportSummary)
-def report_summary(db: Session = Depends(get_db)):
-    return build_report_summary(db)
+def report_summary(
+    filters=Depends(_report_query_filters),
+    db: Session = Depends(get_db),
+):
+    return build_report_summary(db, filters)
+
+
+@app.get("/api/reports/preview", response_model=ReportSummary)
+def report_preview(
+    filters=Depends(_report_query_filters),
+    db: Session = Depends(get_db),
+):
+    return build_report_summary(db, filters)
 
 
 @app.get("/api/reports/pdf")
-def report_pdf(db: Session = Depends(get_db)):
-    pdf_bytes, filename = generate_pdf_report(db)
+def report_pdf(
+    filters=Depends(_report_query_filters),
+    db: Session = Depends(get_db),
+):
+    pdf_bytes, filename = generate_pdf_report(db, filters)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

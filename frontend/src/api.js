@@ -234,9 +234,32 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
-  reportSummary: () => request('/reports/summary'),
-  downloadReport: async () => {
-    const blob = await request('/reports/pdf', { timeoutMs: 60000 })
+  reportSummary: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value == null || value === '') return
+      qs.set(key, Array.isArray(value) ? value.join(',') : value)
+    })
+    const query = qs.toString()
+    return request(`/reports/summary${query ? `?${query}` : ''}`)
+  },
+  reportPreview: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value == null || value === '') return
+      qs.set(key, Array.isArray(value) ? value.join(',') : value)
+    })
+    const query = qs.toString()
+    return request(`/reports/preview${query ? `?${query}` : ''}`)
+  },
+  downloadReport: async (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value == null || value === '') return
+      qs.set(key, Array.isArray(value) ? value.join(',') : value)
+    })
+    const query = qs.toString()
+    const blob = await request(`/reports/pdf${query ? `?${query}` : ''}`, { timeoutMs: 60000 })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
