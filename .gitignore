@@ -5,7 +5,10 @@ venv/
 .env
 *.db
 data/
-backend/models/
+backend/models/*
+!backend/models/.gitkeep
+!backend/models/threat_classifier_v4.joblib
+!backend/models/threat_classifier_v4.metrics.json
 backend/data/
 frontend/node_modules/
 file_drop/*

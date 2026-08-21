@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .classifier import classifier
+from .classifier import classifier, load_model_metrics
 from .collector import collect_from_network, ingest_event, projection_burst
 from .config import BIND_HOST, BIND_PORT, COLLECTION_MODE, SCAN_SUBNET
 from .database import Base, engine, get_db
@@ -205,6 +205,7 @@ def health():
         "lan_ips": list_local_ipv4s(),
         "scan_subnet": SCAN_SUBNET or mon.get("last_subnet"),
         "frontend_bundled": FRONTEND_DIST.exists(),
+        "classifier": load_model_metrics() or {"model_version": "v4", "accuracy": None},
     }
 
 

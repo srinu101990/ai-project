@@ -1,0 +1,12 @@
+{
+  "model_version": "v4",
+  "algorithm": "TF-IDF (1-2 grams) + Logistic Regression",
+  "classes": 20,
+  "train_samples": 80000,
+  "test_samples": 10000,
+  "accuracy": 0.9747,
+  "macro_f1": 0.9743,
+  "eval_protocol": "Held-out templates (unseen wordings), not a random split of copies",
+  "dataset": "Generated SOC-style event text for this project's 20 threat types. Not a 1,000,000,000-row public download \u2014 that volume is not available and would not run on this offline laptop dashboard.",
+  "report": "              precision    recall  f1-score   support\n\n      adware      1.000     1.000     1.000       500\n    backdoor      1.000     1.000     1.000       500\n      benign      1.000     0.748     0.856       500\n      botnet      1.000     0.746     0.855       500\n brute-force      0.797     1.000     0.887       500\n cryptominer      1.000     1.000     1.000       500\n        ddos      1.000     1.000     1.000       500\n  downloader      1.000     1.000     1.000       500\n    fileless      0.799     1.000     0.888       500\n   keylogger      1.000     1.000     1.000       500\n     malware      1.000     1.000     1.000       500\n    phishing      1.000     1.000     1.000       500\n  ransomware      1.000     1.000     1.000       500\n         rat      1.000     1.000     1.000       500\n     rootkit      1.000     1.000     1.000       500\n      social      1.000     1.000     1.000       500\n     spyware      1.000     1.000     1.000       500\n      trojan      1.000     1.000     1.000       500\n       virus      1.000     1.000     1.000       500\n        worm      1.000     1.000     1.000       500\n\n    accuracy                          0.975     10000\n   macro avg      0.980     0.975     0.974     10000\nweighted avg      0.980     0.975     0.974     10000\n"
+}
