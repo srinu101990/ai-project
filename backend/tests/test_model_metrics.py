@@ -15,7 +15,7 @@ class ModelMetricsTests(unittest.TestCase):
         metrics = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
         self.assertGreaterEqual(metrics["accuracy"], 0.80)
         self.assertGreaterEqual(metrics["macro_f1"], 0.80)
-        self.assertGreaterEqual(metrics["train_samples"], 80000)
+        self.assertGreaterEqual(metrics["train_samples"], 160000)
         self.assertEqual(metrics["model_version"], "v4")
 
     def test_gold_examples_keep_viva_labels(self) -> None:

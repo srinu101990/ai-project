@@ -31,6 +31,12 @@ HOSTS = (
     "PC-RECEPTION-01",
     "VM-SOC-LAB-11",
     "HOSTEL-PC-18",
+    "WS-EXAM-CELL",
+    "LAPTOP-HOD-CSE",
+    "PC-LAB-NET-14",
+    "VM-PROJECT-03",
+    "KIOSK-FRONT-2",
+    "SRV-AD-01",
 )
 IPS = (
     "10.87.54.124",
@@ -45,6 +51,10 @@ IPS = (
     "172.16.8.90",
     "203.0.113.77",
     "198.51.100.22",
+    "10.87.54.9",
+    "10.87.54.200",
+    "192.168.0.55",
+    "172.16.4.18",
 )
 USERS = (
     "srinu",
@@ -59,6 +69,10 @@ USERS = (
     "faculty",
     "nurse",
     "registrar",
+    "warden",
+    "principal",
+    "labtech",
+    "cashier",
 )
 FILES = (
     "invoice.pdf.exe",
@@ -76,6 +90,11 @@ FILES = (
     "camera_backup.zip.exe",
     "decrypt_instructions.html",
     "kv_receipt.pdf.scr",
+    "offer-letter.docx.exe",
+    "fee-receipt.pdf.js",
+    "exam-results.xlsm",
+    "usb_autorun.inf",
+    "winlogon.dll.bak",
 )
 CHANNELS = (
     "Network IDS",
@@ -91,37 +110,53 @@ CHANNELS = (
     "Sysmon",
     "Proxy",
     "EDR",
+    "SIEM",
+    "Windows Event Log",
 )
-SENSORS = ("ids", "edr", "mail", "usb", "agent", "firewall", "dns", "sysmon", "proxy")
+SENSORS = ("ids", "edr", "mail", "usb", "agent", "firewall", "dns", "sysmon", "proxy", "siem")
 
 
 def _hash(seed: str) -> str:
     return hashlib.sha256(seed.encode()).hexdigest()
 
 
+def _host(rng: random.Random) -> str:
+    if rng.random() < 0.22:
+        return f"LAB-PC-{rng.randint(10, 99):02d}"
+    return rng.choice(HOSTS)
+
+
+def _ip(rng: random.Random) -> str:
+    if rng.random() < 0.28:
+        return f"10.87.54.{rng.randint(2, 250)}"
+    return rng.choice(IPS)
+
+
 def _fill(rng: random.Random, template: str) -> str:
     text = template.format(
-        host=rng.choice(HOSTS),
-        ip=rng.choice(IPS),
+        host=_host(rng),
+        ip=_ip(rng),
         user=rng.choice(USERS),
         file=rng.choice(FILES),
         sha=_hash(f"{rng.random()}"),
         n=rng.randint(3, 48),
-        port=rng.choice((22, 23, 445, 3389, 4444, 5555, 8080, 993, 445)),
+        port=rng.choice((22, 23, 445, 3389, 4444, 5555, 8080, 993, 445, 5985)),
         channel=rng.choice(CHANNELS),
         sensor=rng.choice(SENSORS),
     )
-    extras = (
+    extras = [
         f"source={rng.choice(CHANNELS)}",
         f"user={rng.choice(USERS)}",
         f"confidence={rng.choice(('high', 'medium', 'critical'))}",
-        f"proto={rng.choice(('TCP', 'UDP', 'SMTP', 'HTTPS', 'SMB', 'FILE'))}",
+        f"proto={rng.choice(('TCP', 'UDP', 'SMTP', 'HTTPS', 'SMB', 'FILE', 'RDP'))}",
         f"sensor={rng.choice(SENSORS)}",
-        f"device={rng.choice(HOSTS)}",
-    )
-    extra = extras[rng.randrange(len(extras))]
-    if rng.random() < 0.55:
-        text = f"{text} [{extra}]"
+        f"device={_host(rng)}",
+        f"ts=2026-0{rng.randint(1, 8)}-{rng.randint(10, 28):02d}T{rng.randint(0, 23):02d}:{rng.randint(0, 59):02d}Z",
+        f"evt={rng.randint(100000, 999999)}",
+    ]
+    rng.shuffle(extras)
+    if rng.random() < 0.72:
+        text = f"{text} [{' '.join(extras[:2])}]"
     return text
 
 
@@ -141,6 +176,11 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Delivery phishing: UPS parcel held, update billing payment or the shipment is cancelled",
         "Password reset lure emailed to {user}: unusual sign-in, confirm your identity now",
         "Fake invoice scam PDF {file} plus a shortened t.co link harvesting credentials",
+        "Gmail lure: {user} clicked verify your account on a fake login portal from {ip}",
+        "Kindly update billing payment for a held FedEx parcel or the bank account is limited",
+        "Countdown phishing: you have {n} hours to confirm your identity or coverage will lapse",
+        "Shared a document with you plus bit.ly credential harvest for {user} on {host}",
+        "Mailbox Guard: unusual sign-in activity, password expired, reset via login page",
         "Hello team, confirm your identity on the login portal or coverage will lapse",
         "Mailbox lure: fake login portal harvests password after kindly verify click",
     ),
@@ -157,6 +197,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Laptop File Guard: virus.exe file infector Win32/Expiro on {host}",
         "Second-PC USB virus: {file} reported as Generic.Virus with SHA-256 hash",
         "Shared folder virus outbreak: Expiro file infector spreading from {host}",
+        "USB File Guard: virus keyword in {file} on {host}, SHA-256 {sha}",
+        "Polymorphic virus Win32/Expiro attached itself to {file} then spread on {ip}",
+        "Quarantine: Generic.Virus file infector found during a full scan of {host}",
+        "Live agent virus report: {file} on second laptop matched Expiro SHA-256 hash",
         "EDR alert: Expiro virus infected {file} and dropped a matching SHA-256 hash",
         "Second laptop {host} reported live virus. File infector Win32/Expiro in {file}",
     ),
@@ -171,6 +215,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Unattended worm activity: Conficker lateral spread scanning port 445",
         "Laptop malware sweep found a WannaCry worm artifact {file} on {host}",
         "IDS: self-replicating worm family spreading through exposed SMB from {ip}",
+        "WannaCry worm scanned port 445 then copied {file} across SMB from {host}",
+        "Conficker worm activity: self-replicating lateral spread with no user action",
+        "Remote agent: worm artifact {file} matching WannaCry on {host} ({ip})",
+        "LAN worm: Conficker copied itself to a neighbor share without a click",
         "IDS: Conficker worm copied itself to neighbor {ip} via SMB",
         "Laptop malware sweep: WannaCry worm self-replicating without a user click",
     ),
@@ -185,6 +233,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "TrickBot trojan credential theft after a malicious Excel macro on {ip}",
         "Banking trojan QakBot follow-on from Emotet on workstation {host}",
         "Trojan family Emotet / TrickBot harvesting credentials from {user}",
+        "Malicious Office macro installed a banking trojan Emotet on {host}",
+        "TrickBot trojanized installer {file} stole Outlook credentials from {user}",
+        "QakBot banking trojan follow-on after Emotet loader on {ip}",
+        "User opened {file}; trojan TrickBot then harvested credentials",
         "User launched {file}; Emotet banking trojan then called C2",
         "TrickBot trojan module harvested credentials on {host}",
     ),
@@ -199,6 +251,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Ransom note README_FOR_DECRYPT.txt: pay bitcoin wallet for the decryption key",
         "Host {host}: files encrypted by LockBit, crypto payment demanded",
         "Desktop note: your files have been encrypted, do not turn off the PC",
+        "LockBit ransomware encrypted Documents and demanded a bitcoin wallet on {host}",
+        "Conti ransom note {file}: how to decrypt after shadow copies deleted",
+        "Your files are encrypted. Pay crypto for the decryption key. Do not turn off the PC",
+        "vssadmin delete shadows then LockBit locked files as .locked on {ip}",
         "LockBit note on desktop: files locked, pay crypto for decryption key",
         "Host {host} hit by Conti ransomware after vssadmin delete shadows",
     ),
@@ -213,6 +269,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "DarkHotel spyware plus WebWatcher screenshots uploaded toward {ip}",
         "Mobile spyware Pegasus exfiltrating messages to an unknown C2",
         "Privacy spyware monitoring {user} location and contacts on {host}",
+        "Stalkerware WebWatcher screen capture spyware uploading telemetry from {host}",
+        "Pegasus spyware exfiltrating messages, contacts, and location to unknown C2",
+        "DarkHotel spyware monitoring browser sessions and cookies for {user}",
+        "Privacy exfiltration spyware on the phone: Pegasus family toward {ip}",
         "Pegasus spyware on the phone exfiltrating contacts and location to C2",
         "DarkHotel spyware captured {user} session cookies from {host}",
     ),
@@ -227,6 +287,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "SearchProtect adware bundled with {file} then changed Chrome search",
         "Unwanted adware tracking installs and injecting popup ads on {ip}",
         "Browser hijacker adware Bundlore reset the start page on {host}",
+        "Adware.Generic changing homepage after freeware bundled with {file}",
+        "SearchProtect adware injected popup ads and reset the search engine",
+        "Unwanted PUP adware tracking installs for {user} on {host}",
+        "Browser hijacking adware Bundlore on {ip} injecting popup ads",
         "Bundlore adware hijacked Chrome homepage and injected popup ads",
         "Adware.Generic PUP changed search settings for {user}",
     ),
@@ -241,6 +305,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Alureon hidden driver rootkit survived ordinary antivirus cleanup on {ip}",
         "Kernel-mode rootkit family TDSS detected in the boot record of {host}",
         "Rootkit scan: ZeroAccess still hiding files and processes on {ip}",
+        "Kernel-mode rootkit Alureon hiding a malicious driver from Task Manager",
+        "TDSS bootkit in the boot record survived ordinary antivirus cleanup on {host}",
+        "ZeroAccess rootkit family concealing processes after reboot of {ip}",
+        "Hidden driver rootkit TDSS / ZeroAccess detected on {host}",
         "Bootkit scan: TDSS rootkit hiding a malicious kernel driver",
         "ZeroAccess rootkit still concealing processes after reboot of {host}",
     ),
@@ -255,6 +323,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Command-and-control botnet callback from {host} after camera recruitment",
         "IoT camera at {ip} recruited into the Mirai botnet with a default password",
         "Emotet botnet swarm waiting for bot herder commands toward {host}",
+        "Mirai IoT botnet recruiting cameras into a command-and-control swarm from {ip}",
+        "Bot herder pushing attack modules to the Emotet botnet callback on {host}",
+        "Default-password camera joined the Mirai botnet then a DDoS swarm",
+        "Command-and-control botnet C2 from {host} after IoT recruitment",
         "Camera at {ip} joined the Mirai botnet after a default-password login",
         "Bot herder issued a new flood module to the Emotet botnet swarm",
     ),
@@ -269,6 +341,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "HawkEye keystroke logging recorded typed passwords then called {ip}",
         "Keylogger family Agent Tesla sha256:{sha} shipping a keylog buffer",
         "Clipboard theft keylogger Formbook on {host} for account {user}",
+        "HawkEye keylogger recording typed passwords and shipping a keylog buffer",
+        "Agent Tesla keystroke logging plus clipboard theft sha256:{sha}",
+        "Formbook keylogger flushed captured credentials for {user} to {ip}",
+        "Keylogger family HawkEye on {host} captured banking passwords",
         "Agent Tesla keylogger flushed keystroke logs and clipboard to C2",
         "Formbook keylogger on {host} captured {user} banking passwords",
     ),
@@ -283,6 +359,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Unauthorized remote control RAT listener on port {port} viewing the screen",
         "Remote access trojan family AsyncRAT interactive session on {host}",
         "Quasar RAT moving files off {ip} after an njRAT implant",
+        "Unauthorized remote control: AsyncRAT viewing the screen on {host}",
+        "njRAT remote access trojan persistence then file transfer from {ip}",
+        "Quasar RAT listener on port {port} opened an interactive session",
+        "Remote Access Trojan family AsyncRAT / njRAT on workstation {host}",
         "AsyncRAT remote access trojan took the desktop session on {host}",
         "Quasar RAT listener on port {port} moving files off {ip}",
     ),
@@ -297,6 +377,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Bitsadmin /transfer living-off-the-land downloader pulled sha256:{sha}",
         "Stage-2 payload downloader Guloader after a phishing document {file}",
         "Dropper family SmokeLoader fetched another executable from {ip}",
+        "Certutil -urlcache downloader Guloader fetched stage-2 payload {file}",
+        "Bitsadmin living-off-the-land downloader on {host} pulled sha256:{sha}",
+        "SmokeLoader dropper downloaded secondary malware after {file}",
+        "Stage-2 payload dropper Guloader from {ip} unpacked on {host}",
         "Guloader downloader pulled a stage-2 payload with sha256:{sha}",
         "SmokeLoader dropper on {host} fetched another executable from {ip}",
     ),
@@ -311,6 +395,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Persistent covert long-term access backdoor remaining after cleanup on {ip}",
         "Backdoor family Cobalt Strike hashed sha256:{sha} plus a webshell",
         "IIS server {host} accepted China Chopper backdoor commands without login",
+        "Persistent Cobalt Strike beacon backdoor calling C2 from {ip} every {n} seconds",
+        "China Chopper webshell backdoor planted on the IIS web root of {host}",
+        "Covert long-term access backdoor remaining after cleanup, sha256:{sha}",
+        "Cobalt Strike backdoor plus webshell on {host} accepted commands without login",
         "Cobalt Strike beacon backdoor hashed sha256:{sha} on {host}",
         "China Chopper webshell backdoor accepted commands without login",
     ),
@@ -325,6 +413,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Fileless malware: PowerShell -EncodedCommand in-memory shellcode on {ip}",
         "LotL fileless technique using WMI and PowerShell Empire in memory",
         "In-memory fileless payload with living-off-the-land PowerShell on {host}",
+        "Fileless WMI persistence with in-memory shellcode, no dropped EXE on {host}",
+        "PowerShell -EncodedCommand living-off-the-land fileless implant on {ip}",
+        "LotL fileless malware: PowerShell Empire in memory via WMI",
+        "Fileless in-memory payload Empire with encoded PowerShell on {host}",
         "PowerShell Empire fileless in-memory payload with WMI persistence",
         "Encoded PowerShell living-off-the-land fileless implant on {host}",
     ),
@@ -339,6 +431,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "stratum+tcp unauthorized mining pool from XMRig process sha256:{sha}",
         "Cryptominer NiceHash / XMRig binary {file} hijacking CPU/GPU",
         "Coinminer Lemon Duck unauthorized mining on compromised host {host}",
+        "XMRig cryptominer hijacking CPU/GPU for Monero mining sha256:{sha}",
+        "Unauthorized mining pool stratum+tcp NiceHash from {ip} on {host}",
+        "Lemon Duck coinminer binary {file} caused high CPU during mining",
+        "Cryptominer XMRig connected to a Monero pool, unauthorized mining",
         "XMRig cryptominer connected to a Monero pool from {ip}",
         "Lemon Duck coinminer caused high CPU on {host} during unauthorized mining",
     ),
@@ -353,6 +449,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Suspicious malware executable download then C2 beacon from {ip}",
         "Double extension dropper {file} classified as generic malware",
         "Dangerous attachment {file} launched malware with registry persistence",
+        "Generic malware double extension {file} plus DLL injection on {host}",
+        "Suspicious process malware launched a reverse shell C2 beacon from {ip}",
+        "PowerShell -enc base64 malware payload with registry persistence",
+        "Lure attachment {file} classified as malware after executable download",
         "Malware dropper {file} used DLL injection and registry persistence",
         "Reverse shell malware with PowerShell -enc base64 payload to C2 beacon",
     ),
@@ -367,6 +467,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "UDP flood distributed denial of service from botnet sources hitting {host}",
         "Traffic flood exhausting capacity and denying availability on the edge firewall",
         "SYN/UDP/HTTP DDoS floods against {host} from botnet sources",
+        "Distributed denial of service UDP flood exhausting capacity on {host}",
+        "HTTP flood DDoS against the public web portal, denying availability",
+        "Edge firewall SYN flood DDoS from botnet sources toward {ip}",
+        "Traffic flood DDoS: SYN/UDP/HTTP exhausting bandwidth capacity",
         "Edge firewall: DDoS SYN flood exhausted bandwidth capacity",
         "Portal at {ip} hit by HTTP flood denial of service",
     ),
@@ -381,6 +485,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "SSH brute force password guessing on port {port} then a successful login",
         "Failed authentication burst: brute force against account {user} on {host}",
         "Password spray brute force of the VPN gateway from {ip}",
+        "SSH auth failures brute force password guessing then a successful login on {host}",
+        "RDP login failures: credential stuffing and password spray against {user}",
+        "Failed authentication burst brute-force of VPN gateway {ip} on port {port}",
+        "Repeated login attempts indicate brute force against {host} from {ip}",
         "VPN gateway {ip} under password spray brute force against {user}",
         "RDP brute force: repeated login attempts and credential stuffing on {host}",
     ),
@@ -395,6 +503,10 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Social engineering gift-card purchase after a help-desk impersonation",
         "Director impersonation social engineering for an urgent wire transfer",
         "Pretends to be IT: social engineering call harvesting MFA from {user}",
+        "Help-desk impersonation social engineering requesting a gift card purchase",
+        "CEO fraud social engineering: urgent wire transfer, do not tell finance",
+        "Social engineering call pretends to be IT and asks {user} for MFA codes",
+        "Director impersonation: wire transfer urgently after a help desk scam",
         "Help desk scam social engineering asked {user} for an MFA code",
         "CEO fraud social engineering: wire transfer urgently, do not tell finance",
     ),
@@ -410,6 +522,11 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "SCCM patch Tuesday reboot completed successfully on {host}",
         "Defender definition update succeeded. No threats on {ip}",
         "{user} saved meeting notes {file} to Documents on {host}",
+        "Normal outbound HTTPS to the corporate CDN. Weekly notes on the shared drive",
+        "Scheduled backup and NTP time sync succeeded on file server {ip}",
+        "Employee joined a video conference. Windows Update installed successfully",
+        "Printer queue cleared. {user} printed pages. No password reset is required",
+        "DNS lookup for a known software update domain from {host} by {user}",
         "Intranet wiki saved. {user} edited the meeting agenda on {host}",
         "Software inventory scan finished with no threats on {ip}",
     ),
