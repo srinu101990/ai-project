@@ -2,7 +2,7 @@
 """Train the local threat classifier and print held-out accuracy.
 
 Usage (from backend/):
-    python -m scripts.train_threat_model
+    python -m scripts.train_threat_model 8000
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def _pipeline() -> Pipeline:
     )
 
 
-def train(per_class: int = 4000) -> dict:
+def train(per_class: int = 8000) -> dict:
     texts, labels, splits = build_template_split(per_class=per_class, seed=42, holdout=2)
     x_train = [text for text, split in zip(texts, splits) if split == "train"]
     y_train = [label for label, split in zip(labels, splits) if split == "train"]
@@ -72,7 +72,8 @@ def train(per_class: int = 4000) -> dict:
         "macro_f1": round(macro_f1, 4),
         "eval_protocol": "Held-out templates (unseen wordings), not a random split of copies",
         "dataset": (
-            "Generated SOC-style event text for this project's 20 threat types. "
+            "Generated SOC-style event text for this project's 20 threat types, "
+            "expanded with extra hosts/files and extra templates per class. "
             "Not a 1,000,000,000-row public download — that volume is not available "
             "and would not run on this offline laptop dashboard."
         ),
@@ -91,5 +92,5 @@ def train(per_class: int = 4000) -> dict:
 
 
 if __name__ == "__main__":
-    per_class = int(sys.argv[1]) if len(sys.argv) > 1 else 4000
+    per_class = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     train(per_class=per_class)
