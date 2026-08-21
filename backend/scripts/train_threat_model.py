@@ -70,7 +70,11 @@ def train(per_class: int = 8000) -> dict:
         "test_samples": int(len(x_test)),
         "accuracy": round(accuracy, 4),
         "macro_f1": round(macro_f1, 4),
-        "eval_protocol": "Held-out templates (unseen wordings), not a random split of copies",
+        "eval_protocol": (
+            "Held-out last-two templates per class (unseen wordings), not a random "
+            "split of copies. Holdout text still uses the same family names, so a "
+            "perfect score here is not a claim of perfect real-world detection."
+        ),
         "dataset": (
             "Generated SOC-style event text for this project's 20 threat types, "
             "expanded with extra hosts/files and extra templates per class. "
