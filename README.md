@@ -31,6 +31,7 @@ file_drop/        Optional folder for malware/ransomware test files
 start-offline.sh  One-command launcher (Linux/macOS)
 start-offline.bat One-command launcher (Windows)
 data/             SQLite DB + generated PDF reports (created at runtime)
+docs/PROJECT_PAPER.md  Step-by-step project paper / framework (start here)
 docs/dataset/     Sample CSV of the generated training corpus (open in Excel)
 docs/training-screenshots/  Dataset + trainer stills for the project report
 ```
