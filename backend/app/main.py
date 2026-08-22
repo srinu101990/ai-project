@@ -686,6 +686,26 @@ def classify_text(payload: ClassifyRequest):
     )
 
 
+@app.get("/api/classifier/dataset")
+def classifier_dataset():
+    """Inspectable sample of the generated training corpus plus saved v4 metrics."""
+    from .training_data import TEMPLATES, preview_corpus, template_catalog
+
+    metrics = load_model_metrics()
+    return {
+        "honesty": (
+            "Generated SOC-style event text for this project's 20 threat types. "
+            "The CSV in docs/dataset is a sample. The full train set is 400,000 "
+            "generated rows — not a public 1-billion-row download."
+        ),
+        "algorithm": "TF-IDF (1-2 grams) + Logistic Regression",
+        "metrics": metrics,
+        "template_counts": {name: len(items) for name, items in TEMPLATES.items()},
+        "templates": template_catalog(),
+        "sample_rows": preview_corpus(train_per_class=4, test_per_class=1),
+    }
+
+
 @app.get("/api/stats", response_model=StatsResponse)
 def stats(db: Session = Depends(get_db)):
     return get_stats(db)

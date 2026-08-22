@@ -15,6 +15,7 @@ import { api } from './api'
 import { ClassificationChart, SeverityChart, SourceChart } from './components/ThreatCharts'
 import ThreatTable from './components/ThreatTable'
 import ClassifyPanel from './components/ClassifyPanel'
+import TrainingDataset from './components/TrainingDataset'
 import IngestPanel from './components/IngestPanel'
 import ReportPanel from './components/ReportPanel'
 import LogAnalyzer from './components/LogAnalyzer'
@@ -637,6 +638,7 @@ function App() {
             onClassified={(data) => setClassifiedType(data?.threat_type || null)}
           />
           <RemediationPanel threatType={classifiedType} context="analyzer" />
+          <TrainingDataset />
         </section>
       ) : null}
 

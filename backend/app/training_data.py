@@ -572,3 +572,53 @@ def build_template_split(
                 labels.append(threat_type)
                 splits.append("test")
     return texts, labels, splits
+
+
+def preview_corpus(
+    *,
+    train_per_class: int = 6,
+    test_per_class: int = 2,
+    seed: int = 42,
+    holdout: int = 2,
+) -> list[dict[str, str]]:
+    """Small inspectable slice for CSV export and the dashboard. Not the full 400k rows."""
+    rng = random.Random(seed)
+    rows: list[dict[str, str]] = []
+    for threat_type in THREAT_TYPES:
+        templates = TEMPLATES[threat_type]
+        cut = max(1, len(templates) - holdout) if holdout else len(templates)
+        train_tpl = templates[:cut] or templates
+        test_tpl = templates[cut:] or templates[-1:]
+        for index in range(train_per_class):
+            rows.append(
+                {
+                    "split": "train",
+                    "threat_type": threat_type,
+                    "event_text": _fill(rng, train_tpl[index % len(train_tpl)]),
+                }
+            )
+        for index in range(test_per_class):
+            rows.append(
+                {
+                    "split": "test",
+                    "threat_type": threat_type,
+                    "event_text": _fill(rng, test_tpl[index % len(test_tpl)]),
+                }
+            )
+    return rows
+
+
+def template_catalog() -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for threat_type, templates in TEMPLATES.items():
+        cut = max(1, len(templates) - 2)
+        for index, template in enumerate(templates, start=1):
+            rows.append(
+                {
+                    "threat_type": threat_type,
+                    "template_index": str(index),
+                    "role": "holdout" if index > cut else "train",
+                    "template": template,
+                }
+            )
+    return rows

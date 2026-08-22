@@ -2437,9 +2437,48 @@ th {
     justify-content: center;
   }
 
+  .dataset-table-wrap {
+    overflow: auto;
+  }
+
   .footer-updated {
     margin-left: 0;
     width: 100%;
     justify-content: center;
   }
+}
+
+.dataset-table-wrap {
+  max-height: 28rem;
+  overflow: auto;
+  border: 1px solid rgba(90, 200, 250, 0.18);
+  border-radius: 10px;
+}
+
+.dataset-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.dataset-table th,
+.dataset-table td {
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(139, 155, 184, 0.16);
+}
+
+.dataset-table th {
+  position: sticky;
+  top: 0;
+  background: #10182a;
+  color: #5ac8fa;
+  font-weight: 600;
+}
+
+.dataset-table td:last-child {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.74rem;
+  color: #c9d4ea;
 }

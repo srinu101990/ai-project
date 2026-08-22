@@ -127,6 +127,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
+  classifierDataset: () => request('/classifier/dataset'),
   checkMail: (payload) =>
     request('/mail/check', {
       method: 'POST',
