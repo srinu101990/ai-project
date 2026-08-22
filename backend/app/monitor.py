@@ -64,19 +64,18 @@ class NetworkMonitor:
         with self._lock:
             if interval_seconds is not None:
                 self._interval = max(15, min(3600, int(interval_seconds)))
-            if self._running and self._thread and self._thread.is_alive():
-                return self.status()
-
-            self._stop.clear()
-            self._running = True
-            self._last_error = None
-            self._thread = threading.Thread(
-                target=self._loop,
-                name="network-monitor",
-                daemon=True,
-            )
-            self._thread.start()
-            return self.status()
+            already = bool(self._running and self._thread and self._thread.is_alive())
+            if not already:
+                self._stop.clear()
+                self._running = True
+                self._last_error = None
+                self._thread = threading.Thread(
+                    target=self._loop,
+                    name="network-monitor",
+                    daemon=True,
+                )
+                self._thread.start()
+        return self.status()
 
     def stop(self) -> dict[str, Any]:
         with self._lock:
@@ -88,17 +87,18 @@ class NetworkMonitor:
         with self._lock:
             self._scanning = False
             self._thread = None
-            return self.status()
+        return self.status()
 
     def set_interval(self, interval_seconds: int) -> dict[str, Any]:
         self._interval = max(15, min(3600, int(interval_seconds)))
         return self.status()
 
     def _loop(self) -> None:
-        # First pass immediately, then wait between cycles.
+        # Let the dashboard open empty, then stream one finding at a time.
+        if self._stop.wait(8.0):
+            return
         while not self._stop.is_set():
             self._run_once()
-            # Wait in small slices so stop() is responsive.
             waited = 0.0
             interval = float(self._interval)
             while waited < interval and not self._stop.is_set():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,12 +16,16 @@ from sklearn.pipeline import Pipeline
 
 from .threat_types import SEVERITY_BY_TYPE, THREAT_TYPES
 
-# v3 model includes expanded malware family classes.
-MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier_v3.joblib"
+# v4 model is TF-IDF + Logistic Regression trained on a large generated corpus.
+MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier_v4.joblib"
+METRICS_PATH = Path(__file__).resolve().parents[1] / "models" / "threat_classifier_v4.metrics.json"
 
 PHISHING_PATTERNS = [
     (r"verify\s+(your\s+)?account", "verify account"),
     (r"urgent\s+action\s+required", "urgent action required"),
+    (r"action\s+required", "action required"),
+    (r"fake\s+invoice", "fake invoice scam"),
+    (r"invoice\s+scam", "invoice scam"),
     (r"click\s+(here|below|the\s+link)", "click-through lure"),
     (r"password\s+(reset|expire|expired)", "password reset lure"),
     (r"login\s+(portal|page|now)", "login portal lure"),
@@ -29,6 +34,23 @@ PHISHING_PATTERNS = [
     (r"update\s+(billing|payment)", "billing update lure"),
     (r"http[s]?://[^\s]*login", "login URL"),
     (r"credential\s+harvest", "credential harvest"),
+    (r"account\s+(has\s+been\s+)?(suspend|locked|limited)", "account lock lure"),
+    (r"confirm\s+(your\s+)?identit", "identity confirm lure"),
+    (r"unusual\s+(sign[- ]?in|activity)", "unusual activity lure"),
+    (r"you\s+have\s+\d+\s+hours", "countdown pressure"),
+    (r"failure\s+to\s+(verify|confirm|update)", "failure-to-act threat"),
+    (r"kindly\s+(update|verify|click)", "kindly-verify lure"),
+    (r"dear\s+(customer|user|account\s+holder)", "generic dear-customer"),
+    (r"shared\s+(a\s+)?document\s+with\s+you", "fake document share"),
+    (r"(dhl|fedex|ups|courier).{0,40}(delivery|parcel|held)", "delivery phishing"),
+    (r"bit\.ly|tinyurl\.com|t\.co/", "shortened link"),
+    (r"mandatory.{0,80}(benefits|election|enrollment)", "mandatory benefits election"),
+    (r"employee.{0,40}(health\s+)?benefits", "employee benefits lure"),
+    (r"health\s+(insurance|benefits)", "health insurance lure"),
+    (r"re-?enroll", "re-enrollment pressure"),
+    (r"lapse in (medical|coverage|benefits)", "coverage-lapse threat"),
+    (r"deadline.{0,40}(friday|submission|5:00)", "hard deadline pressure"),
+    (r"hello\s+team", "generic hello-team greeting"),
 ]
 
 VIRUS_PATTERNS = [
@@ -65,7 +87,10 @@ RANSOMWARE_PATTERNS = [
     (r"pay\s+(in\s+)?crypto", "crypto payment demand"),
     (r"lockbit", "LockBit family"),
     (r"shadow\s+copies\s+deleted", "shadow copies deleted"),
-    (r"readme_for_decrypt", "decrypt readme note"),
+    (r"readme_for_decrypt|readme.*decrypt", "decrypt readme note"),
+    (r"your\s+files\s+are\s+encrypted", "files are encrypted notice"),
+    (r"how\s+to\s+decrypt", "how-to-decrypt note"),
+    (r"\.(wncry|lockbit|locked)\b", "ransomware file extension"),
 ]
 
 SPYWARE_PATTERNS = [
@@ -89,7 +114,7 @@ ROOTKIT_PATTERNS = [
     (r"tdss|alureon", "TDSS family"),
     (r"zeroaccess", "ZeroAccess family"),
     (r"kernel[- ]mode\s+rootkit", "kernel-mode rootkit"),
-    (r"hidden\s+driver\s+rootkit", "hidden driver rootkit"),
+    (r"hidden\s+driver\s+rootkit|hiding\s+(a\s+)?malicious\s+driver", "hidden driver rootkit"),
 ]
 
 BOTNET_PATTERNS = [
@@ -122,6 +147,7 @@ DOWNLOADER_PATTERNS = [
     (r"guloader|smokeloader", "loader family"),
     (r"stage[- ]?2\s+payload\s+download", "stage-2 download"),
     (r"downloaded\s+secondary\s+malware", "secondary malware download"),
+    (r"certutil.*urlcache|bitsadmin.*/transfer", "living-off-the-land downloader"),
 ]
 
 BACKDOOR_PATTERNS = [
@@ -159,6 +185,8 @@ GENERIC_MALWARE_PATTERNS = [
     (r"registry\s+persistence", "registry persistence"),
     (r"dll\s+injection", "DLL injection"),
     (r"\bmalware\b", "malware keyword"),
+    (r"double\s+extension\s+dropper", "double extension dropper"),
+    (r"lure\s+filename\s+on\s+dangerous", "lure attachment filename"),
 ]
 
 DDOS_PATTERNS = [
@@ -257,83 +285,50 @@ def rule_based_classify(text: str) -> ClassificationResult:
     )
 
 
+def load_model_metrics() -> dict:
+    if not METRICS_PATH.exists():
+        return {}
+    try:
+        return json.loads(METRICS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _make_pipeline() -> Pipeline:
+    return Pipeline(
+        [
+            (
+                "tfidf",
+                TfidfVectorizer(
+                    ngram_range=(1, 2),
+                    min_df=2,
+                    max_features=40000,
+                    sublinear_tf=True,
+                ),
+            ),
+            (
+                "clf",
+                LogisticRegression(
+                    max_iter=400,
+                    C=2.0,
+                    class_weight="balanced",
+                    solver="lbfgs",
+                ),
+            ),
+        ]
+    )
+
+
 def _training_corpus() -> tuple[list[str], list[str]]:
-    samples = [
-        ("Urgent action required: verify your account and click the login portal link", "phishing"),
-        ("Your password expired. Reset credentials via the bank account login page", "phishing"),
-        ("Credential harvest attempt via fake password reset email", "phishing"),
-        (
-            "File infector virus Win32/Expiro detected sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
-            "virus",
-        ),
-        (
-            "Polymorphic virus family Generic.Virus with SHA-256 hash in quarantine report",
-            "virus",
-        ),
-        ("Worm WannaCry self-replicating across SMB shares on the LAN", "worm"),
-        ("Conficker worm lateral spread worm activity observed", "worm"),
-        ("Banking trojan Emotet downloaded via malicious Office macro", "trojan"),
-        ("Trojan TrickBot credential theft module installed", "trojan"),
-        ("Your files have been encrypted. Pay bitcoin wallet for decryption key", "ransomware"),
-        ("LockBit ransomware locked files as .locked and demanded crypto payment", "ransomware"),
-        ("Spyware Pegasus exfiltrating contacts messages location from mobile endpoint", "spyware"),
-        ("Screen capture spyware stalkerware telemetry to unknown C2", "spyware"),
-        ("Adware Bundlore browser hijacker injecting popup ads", "adware"),
-        ("Unwanted adware detection family Adware.Generic changing homepage", "adware"),
-        ("Kernel-mode rootkit TDSS hiding malicious driver", "rootkit"),
-        ("ZeroAccess rootkit family concealing processes", "rootkit"),
-        ("Mirai IoT botnet recruiting cameras into command-and-control botnet", "botnet"),
-        ("Botnet bot herder pushing new attack modules", "botnet"),
-        (
-            "Keylogger Agent Tesla keystroke logging sha256:11223344556677889900aabbccddeeff00112233445566778899aabbccddeeff",
-            "keylogger",
-        ),
-        ("Formbook keylogger captured credentials keylog buffer flushed to C2", "keylogger"),
-        ("Remote access trojan AsyncRAT opened unauthorized remote control session", "rat"),
-        ("njRAT remote access trojan persistence on workstation", "rat"),
-        (
-            "Downloader Guloader stage-2 payload download sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-            "downloader",
-        ),
-        ("SmokeLoader dropper downloaded secondary malware executable", "downloader"),
-        (
-            "Backdoor Cobalt Strike beacon sha256:99887766554433221100ffeeddccbbaa99887766554433221100ffeeddccbbaa",
-            "backdoor",
-        ),
-        ("China Chopper webshell backdoor planted on IIS server", "backdoor"),
-        ("Fileless PowerShell Empire living-off-the-land in-memory payload", "fileless"),
-        ("WMI persistence fileless technique with in-memory shellcode", "fileless"),
-        (
-            "Cryptominer XMRig unauthorized mining sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-            "cryptominer",
-        ),
-        ("Lemon Duck coinminer Monero mining on compromised host", "cryptominer"),
-        ("Executable download of suspicious malware with registry persistence", "malware"),
-        ("PowerShell -enc base64 payload launched reverse shell to C2 beacon", "malware"),
-        ("DDoS SYN flood exhausting bandwidth capacity on edge firewall", "ddos"),
-        ("HTTP flood denial of service against public web portal", "ddos"),
-        ("Repeated login attempts and password spray against VPN gateway", "brute-force"),
-        ("SSH auth failures indicate brute force password guessing", "brute-force"),
-        ("Social engineering call impersonating help desk scam for MFA codes", "social"),
-        ("CEO fraud email asking staff to wire transfer urgently", "social"),
-        ("Normal outbound HTTPS traffic to corporate CDN", "benign"),
-        ("Scheduled backup completed successfully on file server", "benign"),
-        ("DNS lookup for known software update domain", "benign"),
-        ("Employee joined a video conference meeting", "benign"),
-    ]
-    texts = [s[0] for s in samples]
-    labels = [s[1] for s in samples]
-    return texts, labels
+    from .training_data import build_corpus
+
+    # Small emergency corpus if the saved v4 model is missing.
+    return build_corpus(per_class=80, seed=42)
 
 
 def train_and_persist_model() -> Pipeline:
     texts, labels = _training_corpus()
-    pipeline = Pipeline(
-        [
-            ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1)),
-            ("clf", LogisticRegression(max_iter=2000)),
-        ]
-    )
+    pipeline = _make_pipeline()
     pipeline.fit(texts, labels)
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipeline, MODEL_PATH)
@@ -342,7 +337,10 @@ def train_and_persist_model() -> Pipeline:
 
 def load_model() -> Pipeline:
     if MODEL_PATH.exists():
-        return joblib.load(MODEL_PATH)
+        try:
+            return joblib.load(MODEL_PATH)
+        except Exception:
+            pass
     return train_and_persist_model()
 
 
@@ -350,10 +348,15 @@ class ThreatClassifier:
     """Hybrid AI classifier: ML model + explainable rule indicators."""
 
     def __init__(self) -> None:
-        self.model = load_model()
+        try:
+            self.model = load_model()
+        except Exception:
+            self.model = None
 
     def classify(self, text: str) -> ClassificationResult:
         rule_result = rule_based_classify(text)
+        if self.model is None:
+            return rule_result
         proba = self.model.predict_proba([text])[0]
         classes = list(self.model.classes_)
         ml_idx = int(np.argmax(proba))

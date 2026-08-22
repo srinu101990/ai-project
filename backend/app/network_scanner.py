@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import concurrent.futures
 import ipaddress
+import re
 import socket
+import subprocess
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -36,7 +38,7 @@ RISKY_PORTS: dict[int, tuple[str, str, str]] = {
     139: ("NetBIOS", "high", "malware"),
     143: ("IMAP", "medium", "phishing"),
     443: ("HTTPS", "low", "benign"),
-    445: ("SMB", "critical", "ransomware"),
+    445: ("SMB", "medium", "malware"),
     993: ("IMAPS", "low", "benign"),
     995: ("POP3S", "low", "benign"),
     1433: ("MSSQL", "high", "malware"),
@@ -79,8 +81,40 @@ class ScanReport:
     message: str
 
 
-def _local_ipv4() -> str:
-    """Best-effort local IPv4 used for outbound traffic."""
+# Phone hotspots and Windows hosted networks. Prefer these over a leftover
+# campus/office 10.x address when the laptop is still joined to both.
+_HOTSPOT_PREFIXES = (
+    "172.20.10.",  # iPhone
+    "192.168.43.",  # Android
+    "192.168.137.",  # Windows hotspot
+    "192.168.173.",
+    "192.168.49.",
+)
+
+_VIRTUAL_IFACE_MARKERS = (
+    "vmnet",
+    "vmware",
+    "virtualbox",
+    "vbox",
+    "hyper-v",
+    "vethernet",
+    "loopback",
+    "bluetooth",
+    "isatap",
+    "teredo",
+    "docker",
+    "wsl",
+    "pseudo-interface",
+)
+
+
+def _is_virtual_iface(name: str) -> bool:
+    lowered = name.lower()
+    return any(marker in lowered for marker in _VIRTUAL_IFACE_MARKERS)
+
+
+def _route_ipv4() -> str:
+    """IPv4 of the current default route (may still be the old campus Wi-Fi)."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.connect(("8.8.8.8", 80))
@@ -91,6 +125,59 @@ def _local_ipv4() -> str:
             return socket.gethostbyname(hostname)
         except OSError:
             return "127.0.0.1"
+
+
+def list_lan_iface_ips() -> list[tuple[str, str]]:
+    """Real LAN adapters only (skip VMware / VPN / loopback)."""
+    rows: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    if psutil is not None:
+        for name, addrs in psutil.net_if_addrs().items():
+            if _is_virtual_iface(name):
+                continue
+            for addr in addrs:
+                if addr.family != socket.AF_INET:
+                    continue
+                ip = addr.address
+                if not ip or ip.startswith("127.") or ip.startswith("169.254."):
+                    continue
+                if ip in seen:
+                    continue
+                seen.add(ip)
+                rows.append((name, ip))
+    return rows
+
+
+def list_local_ipv4s() -> list[str]:
+    """All non-loopback IPv4 addresses on real LAN adapters."""
+    ips = [ip for _name, ip in list_lan_iface_ips()]
+    route = _route_ipv4()
+    if route and not route.startswith("127.") and route not in ips:
+        ips.append(route)
+    return ips
+
+
+def preferred_lan_ip() -> str:
+    """IP the second laptop should ping. Skip VMware; prefer Wi-Fi / hotspot."""
+    rows = list_lan_iface_ips()
+    ips = [ip for _name, ip in rows]
+    for prefix in _HOTSPOT_PREFIXES:
+        for ip in ips:
+            if ip.startswith(prefix):
+                return ip
+    for name, ip in rows:
+        lowered = name.lower()
+        if "wi-fi" in lowered or "wifi" in lowered or "wlan" in lowered or "wireless" in lowered:
+            return ip
+    route = _route_ipv4()
+    if route and not route.startswith("127."):
+        return route
+    return ips[0] if ips else "127.0.0.1"
+
+
+def _local_ipv4() -> str:
+    """Best-effort LAN IPv4 for dashboard join URLs and subnet scans."""
+    return preferred_lan_ip()
 
 
 def resolve_scan_network() -> tuple[str, ipaddress.IPv4Network]:
@@ -124,6 +211,45 @@ def _tcp_open(host: str, port: int, timeout: float = SCAN_TIMEOUT) -> bool:
         return False
 
 
+def _neighbor_ips(network: ipaddress.IPv4Network) -> list[str]:
+    """IPs already seen in the local ARP/neighbor table (other PCs on the LAN)."""
+    commands = (
+        ["ip", "-4", "neigh", "show"],
+        ["arp", "-a"],
+        ["arp", "-an"],
+    )
+    text = ""
+    for cmd in commands:
+        try:
+            completed = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        blob = (completed.stdout or "") + (completed.stderr or "")
+        if blob.strip():
+            text = blob
+            break
+
+    found: list[str] = []
+    seen: set[str] = set()
+    for match in re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", text):
+        try:
+            addr = ipaddress.ip_address(match)
+        except ValueError:
+            continue
+        if not isinstance(addr, ipaddress.IPv4Address):
+            continue
+        if addr in network and not addr.is_loopback and str(addr) not in seen:
+            seen.add(str(addr))
+            found.append(str(addr))
+    return found
+
+
 def _probe_host(host: str) -> tuple[str, list[int]]:
     open_ports: list[int] = []
     for port in DISCOVERY_PORTS:
@@ -137,6 +263,11 @@ def discover_hosts(network: ipaddress.IPv4Network, local_ip: str) -> dict[str, l
     # Always include self; for tiny nets scan everything, else sample + gateway.
     hosts: list[str] = [local_ip]
     hosts_set = {local_ip}
+
+    for ip in _neighbor_ips(network):
+        if ip not in hosts_set:
+            hosts.append(ip)
+            hosts_set.add(ip)
 
     if network.num_addresses <= 256:
         candidates = [str(ip) for ip in network.hosts()]
@@ -209,6 +340,9 @@ def _connection_findings(local_ip: str) -> list[NetworkFinding]:
             lip = local_ip
 
         if status == psutil.CONN_LISTEN and lport in RISKY_PORTS:
+            # Local Windows File Sharing is not a ransomware infection.
+            if lport in {139, 445}:
+                continue
             service, severity, threat = RISKY_PORTS[lport]
             listening_risky += 1
             findings.append(
@@ -219,8 +353,7 @@ def _connection_findings(local_ip: str) -> list[NetworkFinding]:
                     protocol="TCP",
                     raw_payload=(
                         f"Local listener detected on {service} port {lport}. "
-                        f"Exposed {service} services are frequently abused for "
-                        f"remote code execution, worm propagation, and lateral movement."
+                        f"Unexpected {service} exposure can be abused for remote access."
                     ),
                     threat_hint=threat,
                     severity_hint=severity,
@@ -316,8 +449,9 @@ def _findings_from_open_ports(host: str, open_ports: list[int], local_ip: str) -
 
         payload_map = {
             "ransomware": (
-                f"Exposed {service} port {port} on {host}. SMB/RDP exposure is a common "
-                f"ransomware worm propagation path; shadow copies and file encryption risk elevated."
+                f"Exposed {service} port {port} on {host}. Remote desktop exposure can be "
+                f"abused for unauthorized access. This is a network exposure finding, not "
+                f"proof that files on this PC are already encrypted."
             ),
             "phishing": (
                 f"Mail/web service {service}:{port} reachable on {host}. Attackers often abuse "
@@ -343,7 +477,12 @@ def _findings_from_open_ports(host: str, open_ports: list[int], local_ip: str) -
     return findings
 
 
-def scan_network(max_findings: int = 20) -> ScanReport:
+def scan_network(
+    max_findings: int = 20,
+    *,
+    include_connections: bool = True,
+    include_recon: bool = True,
+) -> ScanReport:
     """Run a live network detection pass and return structured findings."""
     local_ip, network = resolve_scan_network()
     alive = discover_hosts(network, local_ip)
@@ -363,34 +502,34 @@ def scan_network(max_findings: int = 20) -> ScanReport:
         open_port_total += len(ports)
         findings.extend(_findings_from_open_ports(host, ports, local_ip))
 
-    findings.extend(_connection_findings(local_ip))
+    if include_connections:
+        findings.extend(_connection_findings(local_ip))
 
-    # Always record a live reconnaissance summary so the dashboard shows
-    # real network activity even on quiet/hardened subnets.
-    host_list = ", ".join(sorted(targets.keys())[:8])
-    findings.append(
-        NetworkFinding(
-            source="Network Recon Sensor",
-            source_ip=local_ip,
-            destination_ip=None,
-            protocol="TCP",
-            raw_payload=(
-                f"Network reconnaissance completed on {network}. "
-                f"Scanner host {local_ip} observed {len(targets)} responsive host(s) "
-                f"[{host_list or 'none'}] and {open_port_total} open service port(s). "
-                f"Scheduled backup completed successfully on monitoring node. "
-                f"Normal outbound HTTPS traffic baseline looks healthy."
-            ),
-            threat_hint="benign",
-            severity_hint="low",
-            indicators=[
-                "network-recon",
-                f"hosts:{len(targets)}",
-                f"open-ports:{open_port_total}",
-                str(network),
-            ],
+    if include_recon:
+        host_list = ", ".join(sorted(targets.keys())[:8])
+        findings.append(
+            NetworkFinding(
+                source="Network Recon Sensor",
+                source_ip=local_ip,
+                destination_ip=None,
+                protocol="TCP",
+                raw_payload=(
+                    f"Network reconnaissance completed on {network}. "
+                    f"Scanner host {local_ip} observed {len(targets)} responsive host(s) "
+                    f"[{host_list or 'none'}] and {open_port_total} open service port(s). "
+                    f"Scheduled backup completed successfully on monitoring node. "
+                    f"Normal outbound HTTPS traffic baseline looks healthy."
+                ),
+                threat_hint="benign",
+                severity_hint="low",
+                indicators=[
+                    "network-recon",
+                    f"hosts:{len(targets)}",
+                    f"open-ports:{open_port_total}",
+                    str(network),
+                ],
+            )
         )
-    )
 
     # Prefer higher-severity / non-benign items first.
     severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}

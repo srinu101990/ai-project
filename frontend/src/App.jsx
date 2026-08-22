@@ -12,9 +12,10 @@ import {
   Wifi,
 } from 'lucide-react'
 import { api } from './api'
-import { ClassificationChart, SeverityChart } from './components/ThreatCharts'
+import { ClassificationChart, SeverityChart, SourceChart } from './components/ThreatCharts'
 import ThreatTable from './components/ThreatTable'
 import ClassifyPanel from './components/ClassifyPanel'
+import TrainingDataset from './components/TrainingDataset'
 import IngestPanel from './components/IngestPanel'
 import ReportPanel from './components/ReportPanel'
 import LogAnalyzer from './components/LogAnalyzer'
@@ -22,7 +23,13 @@ import TopNav from './components/TopNav'
 import SystemMetaRow from './components/SystemMetaRow'
 import RemediationPanel from './components/RemediationPanel'
 import ThreatPopup from './components/ThreatPopup'
+import ThreatDetailModal from './components/ThreatDetailModal'
 import ThreatDefinitions from './components/ThreatDefinitions'
+import MailGuardPanel from './components/MailGuardPanel'
+import LiveSourcesPanel from './components/LiveSourcesPanel'
+import ConnectedPCs from './components/ConnectedPCs'
+import ClientBanner from './components/ClientBanner'
+import FileGuardPanel from './components/FileGuardPanel'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -33,9 +40,41 @@ function useClock() {
   return now
 }
 
+function buildLiveStats(rows) {
+  const byType = {}
+  const bySeverity = {}
+  const bySource = {}
+  let open = 0
+  let confSum = 0
+  let confN = 0
+  for (const item of rows || []) {
+    const type = item.threat_type || 'unknown'
+    const severity = item.severity || 'low'
+    const source = item.source || 'unknown'
+    byType[type] = (byType[type] || 0) + 1
+    bySeverity[severity] = (bySeverity[severity] || 0) + 1
+    bySource[source] = (bySource[source] || 0) + 1
+    if (item.status === 'open' || item.status === 'investigating') open += 1
+    if (type !== 'benign') {
+      confSum += Number(item.confidence) || 0
+      confN += 1
+    }
+  }
+  const ranked = Object.entries(byType).sort((left, right) => right[1] - left[1])
+  return {
+    total_threats: (rows || []).length,
+    open_threats: open,
+    by_type: byType,
+    by_severity: bySeverity,
+    by_source: bySource,
+    timeline: [],
+    recent_confidence_avg: confN ? confSum / confN : 0,
+    top_threat_type: ranked[0] ? ranked[0][0] : '—',
+  }
+}
+
 function App() {
   const [tab, setTab] = useState('dashboard')
-  const [stats, setStats] = useState(null)
   const [threats, setThreats] = useState([])
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -48,12 +87,21 @@ function App() {
   const [monitorBusy, setMonitorBusy] = useState(false)
   const [demoFeed, setDemoFeed] = useState(null)
   const [demoBusy, setDemoBusy] = useState(false)
+  const [sourceStatus, setSourceStatus] = useState(null)
+  const [agentStatus, setAgentStatus] = useState(null)
+  const [mailStatus, setMailStatus] = useState(null)
+  const [sweeping, setSweeping] = useState(false)
+  const [bursting, setBursting] = useState(false)
   const [classifiedType, setClassifiedType] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState([])
   const [bellOpen, setBellOpen] = useState(false)
   const [threatPopups, setThreatPopups] = useState([])
-  const knownThreatIds = useRef(null)
+  const [detailThreat, setDetailThreat] = useState(null)
+  const [fileStatus, setFileStatus] = useState(null)
+  const knownThreatIds = useRef(new Set())
+  const popupQueue = useRef([])
+  const primed = useRef(false)
   const now = useClock()
 
   const showToast = useCallback((message) => {
@@ -66,32 +114,74 @@ function App() {
   }, [])
 
   const pushThreatPopups = useCallback((incoming) => {
-    const stamped = incoming.map((threat, index) => ({
-      ...threat,
-      popupId: `${threat.id}-${Date.now()}-${index}`,
-    }))
-    // Keep newest first; modal shows one at a time until the user closes it.
-    setThreatPopups((prev) => [...stamped, ...prev].slice(0, 8))
+    const chronological = [...incoming].reverse()
+    popupQueue.current = chronological.slice(0, 1)
   }, [])
 
-  const registerNewDetections = useCallback(
-    (threatData) => {
-      const ids = new Set((threatData || []).map((threat) => threat.id))
-      if (knownThreatIds.current === null) {
-        knownThreatIds.current = ids
-        return
-      }
-      const fresh = (threatData || []).filter((threat) => !knownThreatIds.current.has(threat.id))
-      knownThreatIds.current = ids
-      if (!fresh.length) return
+  const ingestFromServer = useCallback((incoming) => {
+    const rows = (incoming || []).filter((item) => item?.id)
+    if (!primed.current) {
+      primed.current = true
+      for (const item of rows) knownThreatIds.current.add(item.id)
+      setThreats(rows.filter((item) => item.threat_type && item.threat_type !== 'benign'))
+      return
+    }
+    const fresh = rows.filter((item) => !knownThreatIds.current.has(item.id))
+    for (const item of fresh) knownThreatIds.current.add(item.id)
+    const alerts = fresh.filter((item) => item.threat_type && item.threat_type !== 'benign')
+    if (!alerts.length) return
+    setThreats((prev) => {
+      const ids = new Set(prev.map((row) => row.id))
+      return [...alerts.filter((row) => !ids.has(row.id)), ...prev]
+    })
+    setUnreadCount((count) => count + alerts.length)
+    setNotifications((prev) => [...alerts].reverse().concat(prev).slice(0, 20))
+    pushThreatPopups([alerts[alerts.length - 1]])
+  }, [pushThreatPopups])
 
-      const newestFirst = [...fresh].reverse()
-      setUnreadCount((count) => count + newestFirst.length)
-      setNotifications((prev) => [...newestFirst, ...prev].slice(0, 20))
-      pushThreatPopups(newestFirst)
-    },
-    [pushThreatPopups],
-  )
+  const refresh = useCallback(async () => {
+    try {
+      const [
+        threatData,
+        reportData,
+        healthData,
+        monitorData,
+        demoData,
+        sourceData,
+        agentData,
+        mailData,
+        filesData,
+      ] = await Promise.all([
+          api.getThreats({ limit: 200 }),
+          api.reportSummary(),
+          api.health().catch(() => null),
+          api.monitorStatus().catch(() => null),
+          api.demoFeedStatus().catch(() => null),
+          api.liveSources().catch(() => null),
+          api.remoteAgents().catch(() => null),
+          api.mailStatus().catch(() => null),
+          api.fileStatus().catch(() => null),
+        ])
+      setThreats((prev) => {
+        const fresh = new Map((threatData || []).map((item) => [item.id, item]))
+        return prev.map((row) => fresh.get(row.id) || row)
+      })
+      setSummary(reportData)
+      if (healthData) setHealth(healthData)
+      if (monitorData) setMonitor(monitorData)
+      if (demoData) setDemoFeed(demoData)
+      if (sourceData) setSourceStatus(sourceData)
+      if (agentData) setAgentStatus(agentData)
+      if (mailData) setMailStatus(mailData)
+      if (filesData) setFileStatus(filesData)
+      ingestFromServer(threatData)
+      setLastRefresh(new Date())
+    } catch (err) {
+      showToast(err.message || 'Failed to load dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }, [ingestFromServer, showToast])
 
   const handleBellToggle = useCallback((nextOpen) => {
     setBellOpen(nextOpen)
@@ -109,37 +199,37 @@ function App() {
     setTab('threats')
   }, [])
 
-  const refresh = useCallback(async () => {
-    try {
-      const [statsData, threatData, reportData, healthData, monitorData, demoData] =
-        await Promise.all([
-          api.getStats(),
-          api.getThreats({ limit: 40 }),
-          api.reportSummary(),
-          api.health().catch(() => null),
-          api.monitorStatus().catch(() => null),
-          api.demoFeedStatus().catch(() => null),
-        ])
-      setStats(statsData)
-      setThreats(threatData)
-      setSummary(reportData)
-      if (healthData) setHealth(healthData)
-      if (monitorData) setMonitor(monitorData)
-      if (demoData) setDemoFeed(demoData)
-      registerNewDetections(threatData)
-      setLastRefresh(new Date())
-    } catch (err) {
-      showToast(err.message || 'Failed to load dashboard data')
-    } finally {
-      setLoading(false)
-    }
-  }, [registerNewDetections, showToast])
-
   useEffect(() => {
     refresh()
-    const timer = window.setInterval(refresh, 5000)
+    const timer = window.setInterval(refresh, 3000)
     return () => window.clearInterval(timer)
   }, [refresh])
+
+  useEffect(() => {
+    if (tab !== 'reports') return undefined
+    refresh()
+    return undefined
+  }, [tab, refresh])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setThreatPopups((prev) => {
+        if (prev.length) return prev
+        const next = popupQueue.current.shift()
+        if (!next) return prev
+        return [{ ...next, popupId: `${next.id}-${Date.now()}` }]
+      })
+    }, 400)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!threatPopups[0]) return undefined
+    const timer = window.setTimeout(() => {
+      dismissThreatPopup(threatPopups[0].popupId)
+    }, 5000)
+    return () => window.clearTimeout(timer)
+  }, [threatPopups, dismissThreatPopup])
 
   useEffect(() => {
     let cancelled = false
@@ -168,9 +258,12 @@ function App() {
   async function handleCollect() {
     setCollecting(true)
     try {
-      const result = await api.collect(12, 'network')
+      const result = await api.collect(1, 'network')
       const detail = [
         result.message || `Collected ${result.events_collected} events`,
+        result.live_sources?.length
+          ? `${result.live_sources.length} live sources`
+          : null,
         result.subnet ? `subnet ${result.subnet}` : null,
         typeof result.hosts_alive === 'number' ? `${result.hosts_alive} host(s)` : null,
       ]
@@ -182,6 +275,38 @@ function App() {
       showToast(err.message || 'Network scan failed')
     } finally {
       setCollecting(false)
+    }
+  }
+
+  async function handleSweepSources() {
+    setSweeping(true)
+    try {
+      const result = await api.sweepSources()
+      showToast(
+        result.message ||
+          `Swept ${result.live_sources?.length || 6} sources · ${result.events_collected} events`,
+      )
+      await refresh()
+    } catch (err) {
+      showToast(err.message || 'Multi-source sweep failed')
+    } finally {
+      setSweeping(false)
+    }
+  }
+
+  async function handleProjectionBurst() {
+    setBursting(true)
+    try {
+      const result = await api.projectionBurst()
+      showToast(
+        result.message ||
+          `Projection burst: ${result.burst_events} sources fired together`,
+      )
+      await refresh()
+    } catch (err) {
+      showToast(err.message || 'Projection burst failed')
+    } finally {
+      setBursting(false)
     }
   }
 
@@ -211,11 +336,11 @@ function App() {
       if (demoFeed?.enabled) {
         const stopped = await api.stopDemoFeed()
         setDemoFeed(stopped)
-        showToast('Threat Demo stopped')
+        showToast('Dummy Demo stopped')
       } else {
         const started = await api.startDemoFeed(30)
         setDemoFeed(started)
-        showToast('Threat Demo started — one virus type every 30 seconds')
+        showToast('Dummy Demo started — fake catalog events, not a live laptop scan')
       }
       await refresh()
     } catch (err) {
@@ -235,27 +360,37 @@ function App() {
     }
   }
 
-  async function handleDownload() {
+  async function handleDownload(filters = {}) {
     setDownloading(true)
     try {
-      await api.downloadReport()
+      await api.downloadReport(filters)
       showToast('PDF report downloaded')
+      return true
     } catch (err) {
       showToast(err.message || 'Report download failed')
+      return false
     } finally {
       setDownloading(false)
     }
   }
 
-  const critical = stats?.by_severity?.critical || 0
+  const stats = buildLiveStats(threats)
+  const critical = stats.by_severity.critical || 0
   const containedResolved = (threats || []).filter((t) =>
     ['contained', 'resolved'].includes(t.status),
   ).length
-  const confidencePct = stats
-    ? `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
-    : '—'
-  const dominant = summary?.top_threat_type || '—'
-  const latestThreat = threats[0] || null
+  const confidencePct = `${((stats.recent_confidence_avg || 0) * 100).toFixed(1)}%`
+  const dominant = stats.top_threat_type
+  const latestRemote = (threats || []).find((item) =>
+    String(item.source || '').toLowerCase().includes('remote agent'),
+  )
+  const latestThreat = latestRemote || threats[0] || null
+  const orderedThreats = [...(threats || [])].sort((left, right) => {
+    const leftRemote = String(left.source || '').toLowerCase().includes('remote agent') ? 0 : 1
+    const rightRemote = String(right.source || '').toLowerCase().includes('remote agent') ? 0 : 1
+    if (leftRemote !== rightRemote) return leftRemote - rightRemote
+    return (right.id || 0) - (left.id || 0)
+  })
 
   const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const dateLabel = now
@@ -265,9 +400,9 @@ function App() {
     ? 'Updating…'
     : demoFeed?.enabled
       ? demoFeed.current_type
-        ? `Stop Demo · ${demoFeed.current_type}`
-        : 'Stop Threat Demo'
-      : 'Threat Demo'
+        ? `Stop Dummy · ${demoFeed.current_type}`
+        : 'Stop Dummy Demo'
+      : 'Dummy Demo'
 
   return (
     <div className="app-shell">
@@ -324,6 +459,13 @@ function App() {
         onDemoToggle={handleToggleDemoFeed}
       />
       <SystemMetaRow health={health} monitor={monitor} lastRefresh={lastRefresh} />
+      <ClientBanner agentStatus={agentStatus} />
+      {fileStatus ? (
+        <div className={`mail-watch-banner ${fileStatus.usb_drives?.length ? 'on' : ''}`}>
+          <span className="live-dot" />
+          {fileStatus.usb_message || 'USB watch starting…'}
+        </div>
+      ) : null}
 
       {tab === 'dashboard' ? (
         <>
@@ -380,19 +522,112 @@ function App() {
               </div>
             </article>
           </section>
+
+          <LiveSourcesPanel
+            sourceStatus={sourceStatus}
+            onSweep={handleSweepSources}
+            onBurst={handleProjectionBurst}
+            sweeping={sweeping || collecting}
+            bursting={bursting}
+          />
         </>
       ) : null}
 
       {tab === 'threats' ? (
         <section className="threats-page">
-          <ThreatDefinitions />
           <div className="panel section page-panel">
             <div className="section-head">
               <h3>Threat Intelligence Feed</h3>
               <span>Live classified network events</span>
             </div>
-            <ThreatTable threats={threats} onStatusChange={handleStatusChange} />
+            <ThreatTable
+              threats={orderedThreats}
+              onStatusChange={handleStatusChange}
+              onOpen={setDetailThreat}
+            />
           </div>
+        </section>
+      ) : null}
+
+      {tab === 'known' ? (
+        <section className="threats-page">
+          <ThreatDefinitions />
+        </section>
+      ) : null}
+
+      {tab === 'mail' ? (
+        <section className="page-grid single">
+          <MailGuardPanel
+            onToast={showToast}
+            onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+            onPolled={refresh}
+            mailStatus={mailStatus}
+          />
+        </section>
+      ) : null}
+
+      {tab === 'files' ? (
+        <section className="page-grid">
+          <div className="panel section">
+            <div className="section-head">
+              <h3>Continuous network scan</h3>
+              <span>Entire LAN — not this laptop only</span>
+            </div>
+            <p className="muted source-copy">
+              The dashboard watches the whole subnet in the background: live hosts, risky
+              ports, and the six collectors (Network IDS, Endpoint, Firewall, DNS, Email,
+              Auth) at the same time. New findings are classified by the AI module and
+              appear on Dashboard charts and the Threat Intelligence feed.
+            </p>
+            <div className="action-bar compact">
+              <button
+                className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={handleToggleMonitor}
+                disabled={monitorBusy}
+              >
+                {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                {monitorBusy
+                  ? 'Updating…'
+                  : monitor?.enabled
+                    ? 'Pause network scan'
+                    : 'Resume network scan'}
+              </button>
+              <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
+                <Radar size={16} />
+                {collecting ? 'Scanning network…' : 'Scan network now'}
+              </button>
+              <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
+                <RefreshCw size={16} className={loading ? 'spin' : undefined} />
+                Refresh
+              </button>
+            </div>
+            <div className="source-status mono">
+              <div>
+                Status:{' '}
+                <strong>
+                  {monitor?.scanning || sourceStatus?.sweeping
+                    ? 'Scanning network…'
+                    : monitor?.enabled
+                      ? 'Monitoring entire network'
+                      : 'Paused'}
+                </strong>
+              </div>
+              <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
+              <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
+              <div>
+                Live sources: {sourceStatus?.live_source_count ?? 0}/
+                {sourceStatus?.source_count ?? 6}
+              </div>
+              <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
+              <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
+              <div>Last message: {sourceStatus?.last_message || monitor?.last_message || '—'}</div>
+            </div>
+          </div>
+          <FileGuardPanel
+            onToast={showToast}
+            onChecked={(data) => setClassifiedType(data?.threat_type || null)}
+            fileStatus={fileStatus}
+          />
         </section>
       ) : null}
 
@@ -402,12 +637,13 @@ function App() {
             onToast={showToast}
             onClassified={(data) => setClassifiedType(data?.threat_type || null)}
           />
-          <RemediationPanel threatType={classifiedType} />
+          <RemediationPanel threatType={classifiedType} context="analyzer" />
+          <TrainingDataset />
         </section>
       ) : null}
 
       {tab === 'reports' ? (
-        <section className="page-grid">
+        <section className="page-grid reports-page">
           <ReportPanel
             summary={summary}
             onDownload={handleDownload}
@@ -421,11 +657,11 @@ function App() {
             <div className="snapshot-grid">
               <div>
                 <div className="stat-label">Open cases</div>
-                <div className="stat-value">{stats?.open_threats ?? '—'}</div>
+                <div className="stat-value">{summary?.open_threats ?? stats?.open_threats ?? '—'}</div>
               </div>
               <div>
                 <div className="stat-label">High severity</div>
-                <div className="stat-value">{stats?.by_severity?.high ?? 0}</div>
+                <div className="stat-value">{summary?.high_count ?? stats?.by_severity?.high ?? 0}</div>
               </div>
               <div>
                 <div className="stat-label">Monitor cycles</div>
@@ -438,60 +674,14 @@ function App() {
 
       {tab === 'sources' ? (
         <section className="page-grid sources-page">
-          <div className="panel section">
-            <div className="section-head">
-              <h3>Network Collection</h3>
-              <span>Continuous LAN monitoring</span>
-            </div>
-            <p className="muted source-copy">
-              Live host/port/connection scanning runs in the background. Pause anytime, or force an
-              immediate scan of the current network.
-            </p>
-            <div className="action-bar compact">
-              <button
-                className={`btn ${monitor?.enabled ? 'btn-ghost' : 'btn-primary'}`}
-                onClick={handleToggleMonitor}
-                disabled={monitorBusy}
-              >
-                {monitor?.enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
-                {monitorBusy
-                  ? 'Updating…'
-                  : monitor?.enabled
-                    ? 'Pause Monitoring'
-                    : 'Resume Monitoring'}
-              </button>
-              <button className="btn btn-primary" onClick={handleCollect} disabled={collecting}>
-                <Radar size={16} />
-                {collecting ? 'Scanning now…' : 'Scan Now'}
-              </button>
-              <button className="btn btn-ghost" onClick={refresh} disabled={loading}>
-                <RefreshCw size={16} className={loading ? 'spin' : undefined} />
-                Refresh
-              </button>
-            </div>
-            <div className="source-status mono">
-              <div>
-                Status:{' '}
-                <strong>
-                  {monitor?.scanning
-                    ? 'Scanning…'
-                    : monitor?.enabled
-                      ? 'Monitoring'
-                      : 'Paused'}
-                </strong>
-              </div>
-              <div>Interval: {monitor?.interval_seconds ?? '—'}s</div>
-              <div>Cycles: {monitor?.cycles_completed ?? 0}</div>
-              <div>Subnet: {health?.scan_subnet || monitor?.last_subnet || '—'}</div>
-              <div>Local IP: {health?.local_ip || monitor?.last_local_ip || '—'}</div>
-              <div>Last message: {monitor?.last_message || '—'}</div>
-            </div>
-          </div>
+          <SourceChart stats={stats || { by_source: {} }} />
           <IngestPanel onIngested={refresh} onToast={showToast} />
+          <ConnectedPCs agentStatus={agentStatus} onToast={showToast} />
         </section>
       ) : null}
 
       <ThreatPopup items={threatPopups} onDismiss={dismissThreatPopup} />
+      <ThreatDetailModal threat={detailThreat} onClose={() => setDetailThreat(null)} />
       {toast ? <div className="toast">{toast}</div> : null}
     </div>
   )

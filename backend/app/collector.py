@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from .classifier import classifier
 from .config import ALLOW_SIMULATED_FALLBACK, COLLECTION_MODE, MONITOR_DEDUPE_MINUTES
 from .models import CollectionJob, ThreatEvent
-from .network_scanner import NetworkFinding, scan_network
+from .multi_source import SOURCE_NAMES, gather_all_sources, host_label, source_hub
+from .network_scanner import NetworkFinding
+from .threat_types import SEVERITY_BY_TYPE
 
 THREAT_SOURCES = [
     "Network IDS Sensor",
@@ -185,28 +187,51 @@ def _collect_live_network(
     *,
     dedupe: bool = False,
 ) -> dict[str, Any]:
-    report = scan_network(max_findings=max(batch_size, 8))
+    source_hub.mark_sweeping(True)
+    try:
+        report = gather_all_sources(max_findings=max(batch_size, len(SOURCE_NAMES)))
+    finally:
+        source_hub.mark_sweeping(False)
+
     created: list[ThreatEvent] = []
     skipped_duplicates = 0
-
-    # Prefer storing every live finding; only trim excess benign noise after
-    # we already have enough higher-signal events.
+    seen_sources: set[str] = set()
     non_benign = 0
-    for finding in report.findings:
+
+    findings = list(report.findings)
+    if batch_size <= 2:
+        findings.sort(
+            key=lambda item: (
+                0 if item.threat_hint and item.threat_hint != "benign" else 1,
+            )
+        )
+
+    # Projector sweeps keep one event per source. Live monitor stores one finding
+    # per cycle so the dashboard fills in real time instead of a first-open burst.
+    for finding in findings:
         event = _event_from_finding(finding)
-        if event.threat_type == "benign" and non_benign >= max(3, batch_size // 2):
+        first_from_source = event.source not in seen_sources
+        if (
+            batch_size > 2
+            and event.threat_type == "benign"
+            and not first_from_source
+            and non_benign >= max(3, batch_size // 2)
+        ):
             continue
         if dedupe and _is_duplicate(db, event, MONITOR_DEDUPE_MINUTES):
             skipped_duplicates += 1
+            source_hub.note_event(event.source, event.threat_type)
+            seen_sources.add(event.source)
             continue
         db.add(event)
         created.append(event)
+        seen_sources.add(event.source)
+        source_hub.note_event(event.source, event.threat_type)
         if event.threat_type != "benign":
             non_benign += 1
         if len(created) >= batch_size:
             break
 
-    # Only fall back when the scanner produced zero findings at all.
     if not report.findings and not created and ALLOW_SIMULATED_FALLBACK:
         job.message = (
             f"{report.message}. No live findings — seeding simulated demo events."
@@ -219,7 +244,7 @@ def _collect_live_network(
         message = f"{message} ({skipped_duplicates} duplicate finding(s) skipped)"
 
     job.status = "completed"
-    job.sources_scanned = report.hosts_scanned
+    job.sources_scanned = max(len(report.snapshots), 1)
     job.events_collected = len(created)
     job.message = message
     job.finished_at = datetime.now(timezone.utc)
@@ -240,6 +265,7 @@ def _collect_live_network(
         "hosts_alive": report.hosts_alive,
         "open_ports": report.open_ports,
         "events": created,
+        "live_sources": [snap.source_name for snap in report.snapshots if snap.online],
     }
 
 
@@ -257,7 +283,7 @@ def collect_from_network(
     job = CollectionJob(
         status="running",
         message=(
-            "Scanning live network hosts and connections..."
+            "Sweeping Network IDS, Endpoint, Firewall, DNS, Email, and Auth sources..."
             if selected == "network"
             else "Running simulated multi-source collection..."
         ),
@@ -306,4 +332,127 @@ def ingest_event(
     db.add(event)
     db.commit()
     db.refresh(event)
+    source_hub.note_event(event.source, event.threat_type)
     return event
+
+
+PROJECTION_BURST = [
+    {
+        "source": "Network IDS Sensor",
+        "protocol": "SMB",
+        "hint": "ransomware",
+        "payload": (
+            "Network IDS on {host} flagged exposed SMB/RDP path. "
+            "LockBit ransomware locked files as .locked and demanded crypto payment. "
+            "Shadow copies deleted, readme_for_decrypt found."
+        ),
+    },
+    {
+        "source": "Endpoint Detection Agent",
+        "protocol": "PROCESS",
+        "hint": "trojan",
+        "payload": (
+            "Endpoint agent on {host} detected banking trojan Emotet downloaded "
+            "via malicious Office macro with registry persistence."
+        ),
+    },
+    {
+        "source": "Firewall Flow Logs",
+        "protocol": "TCP",
+        "hint": "ddos",
+        "payload": (
+            "Firewall Flow Logs on {host} observed DDoS SYN flood exhausting "
+            "bandwidth capacity on the edge path. HTTP flood denial of service against public web portal."
+        ),
+    },
+    {
+        "source": "DNS Sinkhole",
+        "protocol": "DNS",
+        "hint": "malware",
+        "payload": (
+            "DNS Sinkhole on {host} blocked C2 beacon lookup. PowerShell -enc base64 "
+            "payload launched reverse shell to C2 beacon after suspicious resolver query."
+        ),
+    },
+    {
+        "source": "Email Gateway",
+        "protocol": "SMTP",
+        "hint": "phishing",
+        "payload": (
+            "Email Gateway on {host} quarantined message: Urgent action required: "
+            "verify your account and click the login portal link. Credential harvest attempt "
+            "via fake password reset email."
+        ),
+    },
+    {
+        "source": "Auth Gateway",
+        "protocol": "SSH",
+        "hint": "brute-force",
+        "payload": (
+            "Auth Gateway on {host} detected repeated login attempts and password spray "
+            "against VPN gateway. SSH auth failures indicate brute force password guessing."
+        ),
+    },
+]
+
+
+def projection_burst(db: Session) -> dict[str, Any]:
+    """Inject one classified event from every live source at the same time.
+
+    Used for projector demos when the office LAN is quiet. Payloads are still
+    classified by the AI model. Origin is marked simulated; source names match
+    the six live collectors so the Sources panel lights up together.
+    """
+    from .network_scanner import resolve_scan_network
+
+    local_ip, network = resolve_scan_network()
+    host = host_label(local_ip)
+    stamp = datetime.now(timezone.utc)
+    created: list[ThreatEvent] = []
+
+    live = collect_from_network(db, batch_size=12, mode="network", dedupe=True)
+
+    for sample in PROJECTION_BURST:
+        payload = sample["payload"].format(host=host)
+        result = classifier.classify(payload)
+        threat_type = sample["hint"]
+        event = ThreatEvent(
+            source=sample["source"],
+            source_ip=local_ip,
+            destination_ip=_random_ip(private=False),
+            protocol=sample["protocol"],
+            raw_payload=payload,
+            threat_type=threat_type,
+            severity=SEVERITY_BY_TYPE.get(threat_type, result.severity),
+            confidence=round(max(result.confidence, 0.86), 4),
+            indicators=", ".join(
+                list(result.indicators or []) + [f"projection-burst:{sample['hint']}", "multi-source"]
+            ),
+            status="open",
+            is_simulated=True,
+            created_at=stamp,
+        )
+        db.add(event)
+        created.append(event)
+        source_hub.note_event(event.source, event.threat_type)
+
+    db.commit()
+    for event in created:
+        db.refresh(event)
+
+    return {
+        "status": "completed",
+        "mode": "projection-burst",
+        "subnet": str(network),
+        "local_ip": local_ip,
+        "live_events": live.get("events_collected", 0),
+        "burst_events": len(created),
+        "events_collected": int(live.get("events_collected") or 0) + len(created),
+        "sources_scanned": len(PROJECTION_BURST),
+        "live_sources": list(SOURCE_NAMES),
+        "message": (
+            f"Projection burst: {len(created)} sources fired together on {host} "
+            f"plus {live.get('events_collected', 0)} live finding(s) from {network}."
+        ),
+        "events": created,
+    }

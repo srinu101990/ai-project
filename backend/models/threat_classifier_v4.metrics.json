@@ -1,0 +1,12 @@
+{
+  "model_version": "v4",
+  "algorithm": "TF-IDF (1-2 grams) + Logistic Regression",
+  "classes": 20,
+  "train_samples": 400000,
+  "test_samples": 50000,
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "eval_protocol": "Held-out last-two templates per class (unseen wordings), not a random split of copies. Holdout text still uses the same family names, so a perfect score here is not a claim of perfect real-world detection.",
+  "dataset": "Generated SOC-style event text for this project's 20 threat types, expanded with extra hosts/files, extra templates, and more unique event fill. Not a 1,000,000,000-row public download \u2014 that volume is not available and would not run on this offline laptop dashboard.",
+  "report": "              precision    recall  f1-score   support\n\n      adware      1.000     1.000     1.000      2500\n    backdoor      1.000     1.000     1.000      2500\n      benign      1.000     1.000     1.000      2500\n      botnet      1.000     1.000     1.000      2500\n brute-force      1.000     1.000     1.000      2500\n cryptominer      1.000     1.000     1.000      2500\n        ddos      1.000     1.000     1.000      2500\n  downloader      1.000     1.000     1.000      2500\n    fileless      1.000     1.000     1.000      2500\n   keylogger      1.000     1.000     1.000      2500\n     malware      1.000     1.000     1.000      2500\n    phishing      1.000     1.000     1.000      2500\n  ransomware      1.000     1.000     1.000      2500\n         rat      1.000     1.000     1.000      2500\n     rootkit      1.000     1.000     1.000      2500\n      social      1.000     1.000     1.000      2500\n     spyware      1.000     1.000     1.000      2500\n      trojan      1.000     1.000     1.000      2500\n       virus      1.000     1.000     1.000      2500\n        worm      1.000     1.000     1.000      2500\n\n    accuracy                          1.000     50000\n   macro avg      1.000     1.000     1.000     50000\nweighted avg      1.000     1.000     1.000     50000\n"
+}

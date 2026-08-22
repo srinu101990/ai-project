@@ -1,58 +1,70 @@
 @echo off
-REM Start CYBER_SENTINEL.AI on Windows (live network detection by default)
+REM Double-click this file. Keep the window open. Do not open Chrome first.
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-if "%COLLECTION_MODE%"=="" set COLLECTION_MODE=network
-if "%BIND_HOST%"=="" set BIND_HOST=0.0.0.0
-if "%BIND_PORT%"=="" set BIND_PORT=8000
+echo.
+echo ============================================================
+echo  CYBER_SENTINEL.AI
+echo  Keep this black window OPEN the whole time.
+echo  Log file: %CD%\start-offline.log
+echo ============================================================
+echo.
 
-where python >nul 2>&1
-if errorlevel 1 goto :no_python
-
-if not exist backend\.venv goto :need_install
-
-call backend\.venv\Scripts\activate.bat
-
-python -c "import fastapi, uvicorn, psutil" >nul 2>&1
-if errorlevel 1 goto :need_install
-
-if not exist frontend\dist (
-  echo ERROR: frontend\dist missing. Build with: cd frontend ^&^& npm install ^&^& npm run build
+if not exist "%~dp0bootstrap.py" (
+  echo ERROR: Extract the ZIP first.
+  echo Then open the folder that contains start-offline.bat
+  echo ^(not the zip file itself, and not only the inner empty window^).
+  echo.
   pause
   exit /b 1
 )
 
-echo.
-echo CYBER_SENTINEL.AI — %COLLECTION_MODE% detection mode
-echo Dashboard (this PC): http://127.0.0.1:%BIND_PORT%
-echo Dashboard (LAN):     http://^<your-lan-ip^>:%BIND_PORT%
-echo API docs:            http://127.0.0.1:%BIND_PORT%/docs
-echo Keep this window open. Press Ctrl+C to stop.
-echo.
+set "LAUNCHER="
+py -3 -c "import sys; raise SystemExit(0 if sys.version_info>=(3,10) else 1)" 2>nul
+if not errorlevel 1 set "LAUNCHER=py -3"
 
-cd backend
-python run.py --host %BIND_HOST% --port %BIND_PORT%
+if not defined LAUNCHER (
+  python -c "import sys; raise SystemExit(0 if sys.version_info>=(3,10) and 'WindowsApps' not in sys.executable else 1)" 2>nul
+  if not errorlevel 1 set "LAUNCHER=python"
+)
+
+if not defined LAUNCHER (
+  python3 -c "import sys; raise SystemExit(0 if sys.version_info>=(3,10) else 1)" 2>nul
+  if not errorlevel 1 set "LAUNCHER=python3"
+)
+
+if not defined LAUNCHER goto :no_python
+
+echo Using: %LAUNCHER%
+echo First run may take a few minutes while packages install.
+echo Chrome will open ONE tab AFTER the server is ready.
+echo.
+echo SECOND laptop: do NOT run this file. Run agent\start-agent.bat
+echo and type the main laptop URL, for example http://192.168.1.24:8000
+echo If Windows Firewall pops up, click Allow access.
+echo.
+%LAUNCHER% "%~dp0bootstrap.py"
+echo.
+echo If Chrome did not open, read start-offline.log in this folder
+echo and open the URL printed above.
+echo.
+pause
 goto :eof
 
 :no_python
-echo ERROR: Python not found. Install from python.org and enable PATH.
+echo.
+echo PYTHON WAS NOT FOUND ^(or only the Microsoft Store fake python^).
+echo.
+echo 1. Download Python 3.12: https://www.python.org/downloads/
+echo 2. Tick BOTH:
+echo      Add python.exe to PATH
+echo      py launcher
+echo 3. Close this window, extract the zip again if needed,
+echo    then double-click start-offline.bat
+echo 4. Do NOT type 127.0.0.1 in Chrome until this window stays open
+echo    and says READY.
+echo.
+start https://www.python.org/downloads/
 pause
 exit /b 1
-
-:need_install
-echo Dependencies not installed yet.
-if exist backend\install-windows.bat (
-  echo Running backend\install-windows.bat ...
-  cd backend
-  call install-windows.bat
-) else (
-  echo Creating venv and installing requirements...
-  python -m venv backend\.venv
-  call backend\.venv\Scripts\activate.bat
-  python -m pip install --upgrade pip
-  python -m pip install -r backend\requirements.txt
-  echo Install complete. Run start-offline.bat again.
-  pause
-)
-goto :eof

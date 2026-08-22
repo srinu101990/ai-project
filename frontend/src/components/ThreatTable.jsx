@@ -1,8 +1,8 @@
 const STATUSES = ['open', 'investigating', 'contained', 'resolved']
 
-export default function ThreatTable({ threats, onStatusChange }) {
+export default function ThreatTable({ threats, onStatusChange, onOpen }) {
   if (!threats?.length) {
-    return <div className="empty">No threat events yet. Run a network collection scan.</div>
+    return <div className="empty">No detections yet. Live monitoring will show each threat one by one.</div>
   }
 
   return (
@@ -24,7 +24,16 @@ export default function ThreatTable({ threats, onStatusChange }) {
         <tbody>
           {threats.map((threat) => (
             <tr key={threat.id}>
-              <td className="mono">#{threat.id}</td>
+              <td className="mono">
+                <button
+                  type="button"
+                  className="threat-id-btn"
+                  onClick={() => onOpen?.(threat)}
+                  title="Open full details"
+                >
+                  #{threat.id}
+                </button>
+              </td>
               <td>
                 <span className={`badge ${threat.threat_type}`}>{threat.threat_type}</span>
               </td>
@@ -59,10 +68,15 @@ export default function ThreatTable({ threats, onStatusChange }) {
                 </select>
               </td>
               <td style={{ maxWidth: 220 }}>
-                <div className="muted" style={{ fontSize: '0.82rem', lineHeight: 1.4 }}>
+                <button
+                  type="button"
+                  className="threat-payload-btn"
+                  onClick={() => onOpen?.(threat)}
+                >
                   {threat.raw_payload.slice(0, 90)}
                   {threat.raw_payload.length > 90 ? '…' : ''}
-                </div>
+                  <span className="muted"> View full</span>
+                </button>
               </td>
             </tr>
           ))}

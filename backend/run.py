@@ -2,10 +2,32 @@
 
 import argparse
 import os
+import threading
+import time
+import urllib.request
+import webbrowser
 
 import uvicorn
 
 from app.config import BIND_HOST, BIND_PORT
+
+
+def _open_browser_when_ready(port: int) -> None:
+    url = f"http://127.0.0.1:{port}"
+    health = f"{url}/api/health"
+
+    def worker() -> None:
+        for _ in range(90):
+            try:
+                urllib.request.urlopen(health, timeout=1)
+                webbrowser.open(url)
+                print(f"Dashboard ready: {url}", flush=True)
+                return
+            except Exception:
+                time.sleep(0.4)
+        print("Server did not become ready. Check the error above.", flush=True)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 if __name__ == "__main__":
@@ -26,6 +48,8 @@ if __name__ == "__main__":
         help="Enable auto-reload (dev only)",
     )
     args = parser.parse_args()
+    if os.getenv("SENTINEL_OPEN_BROWSER", "1").strip().lower() not in {"0", "false", "no", "off"}:
+        _open_browser_when_ready(args.port)
 
     uvicorn.run(
         "app.main:app",

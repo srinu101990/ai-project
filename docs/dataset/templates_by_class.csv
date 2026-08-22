@@ -1,0 +1,330 @@
+threat_type,template_index,role,template
+phishing,1,train,Urgent action required: verify your account and click the login portal {ip}
+phishing,2,train,"Dear customer, unusual sign-in activity. Your account has been limited. Click here to verify your account"
+phishing,3,train,Password expired. Reset credentials via the bank account login page now
+phishing,4,train,"Action Required: Mandatory 2026 Employee Health Benefits Election. Hello Team, re-enroll to avoid a lapse in medical coverage. Deadline Friday 5:00 PM EST"
+phishing,5,train,DHL parcel held. Kindly update billing payment at http://paypa1-login.com/login
+phishing,6,train,Shared a document with you. Failure to verify within {n} hours will suspend the bank account
+phishing,7,train,Credential harvest attempt via fake invoice scam and shortened bit.ly link
+phishing,8,train,Laptop mail from security@paypa1-login.com. Subject: Urgent action required: verify your account
+phishing,9,train,Spearphish: {user} received a fake OWA login portal for {host} from {ip}
+phishing,10,train,Mailbox lure: kindly verify payroll on http://paypa1-login.com/login or the bank account is locked
+phishing,11,train,HR spoof: {user} must click here to re-enroll benefits before coverage will lapse
+phishing,12,train,"Delivery phishing: UPS parcel held, update billing payment or the shipment is cancelled"
+phishing,13,train,"Password reset lure emailed to {user}: unusual sign-in, confirm your identity now"
+phishing,14,train,Fake invoice scam PDF {file} plus a shortened t.co link harvesting credentials
+phishing,15,train,Gmail lure: {user} clicked verify your account on a fake login portal from {ip}
+phishing,16,train,Kindly update billing payment for a held FedEx parcel or the bank account is limited
+phishing,17,train,Countdown phishing: you have {n} hours to confirm your identity or coverage will lapse
+phishing,18,train,Shared a document with you plus bit.ly credential harvest for {user} on {host}
+phishing,19,train,"Mailbox Guard: unusual sign-in activity, password expired, reset via login page"
+phishing,20,holdout,"Hello team, confirm your identity on the login portal or coverage will lapse"
+phishing,21,holdout,Mailbox lure: fake login portal harvests password after kindly verify click
+virus,1,train,File infector virus Win32/Expiro detected sha256:{sha}
+virus,2,train,Polymorphic virus family Generic.Virus with SHA-256 hash in quarantine report
+virus,3,train,USB stick on second laptop {host} ({ip}) has virus in {file} on removable drive
+virus,4,train,AV quarantine: virus keyword file infector attached to host program {file}
+virus,5,train,Win32/Expiro file infector virus spreading through shared folder on {host}
+virus,6,train,Generic.Virus sample sha256:{sha} detected by endpoint scanner
+virus,7,train,Virus scan on {host}: Win32/Expiro infected {file} and the SHA-256 hash matched
+virus,8,train,Removable drive virus: file infector copied {file} onto {host} from USB
+virus,9,train,Quarantine event: polymorphic virus Generic.Virus sha256:{sha} on {ip}
+virus,10,train,Laptop File Guard: virus.exe file infector Win32/Expiro on {host}
+virus,11,train,Second-PC USB virus: {file} reported as Generic.Virus with SHA-256 hash
+virus,12,train,Shared folder virus outbreak: Expiro file infector spreading from {host}
+virus,13,train,"USB File Guard: virus keyword in {file} on {host}, SHA-256 {sha}"
+virus,14,train,Polymorphic virus Win32/Expiro attached itself to {file} then spread on {ip}
+virus,15,train,Quarantine: Generic.Virus file infector found during a full scan of {host}
+virus,16,train,Live agent virus report: {file} on second laptop matched Expiro SHA-256 hash
+virus,17,holdout,EDR alert: Expiro virus infected {file} and dropped a matching SHA-256 hash
+virus,18,holdout,Second laptop {host} reported live virus. File infector Win32/Expiro in {file}
+worm,1,train,Worm WannaCry self-replicating across SMB shares on the LAN
+worm,2,train,Conficker worm lateral spread worm activity observed on {host}
+worm,3,train,Self-replicating worm scanning port 445 from {ip} without user action
+worm,4,train,WannaCry worm family spreading laterally through exposed SMB
+worm,5,train,Remote agent on {host} ({ip}) found worm artifact {file}
+worm,6,train,Worm Conficker copied itself to ADMIN$ on neighbor {ip} without a click
+worm,7,train,SMB worm WannaCry self-replicating from {host} across the LAN
+worm,8,train,Unattended worm activity: Conficker lateral spread scanning port 445
+worm,9,train,Laptop malware sweep found a WannaCry worm artifact {file} on {host}
+worm,10,train,IDS: self-replicating worm family spreading through exposed SMB from {ip}
+worm,11,train,WannaCry worm scanned port 445 then copied {file} across SMB from {host}
+worm,12,train,Conficker worm activity: self-replicating lateral spread with no user action
+worm,13,train,Remote agent: worm artifact {file} matching WannaCry on {host} ({ip})
+worm,14,train,LAN worm: Conficker copied itself to a neighbor share without a click
+worm,15,holdout,IDS: Conficker worm copied itself to neighbor {ip} via SMB
+worm,16,holdout,Laptop malware sweep: WannaCry worm self-replicating without a user click
+trojan,1,train,Banking trojan Emotet downloaded via malicious Office macro
+trojan,2,train,Trojan TrickBot credential theft module installed on {host}
+trojan,3,train,Trojanized installer {file} opened attacker access after user ran it
+trojan,4,train,Emotet trojan disguised as {file} stealing Outlook credentials
+trojan,5,train,QakBot banking trojan follow-on from Emotet loader on {ip}
+trojan,6,train,Office macro dropped the Emotet banking trojan then TrickBot on {host}
+trojan,7,train,User ran a trojanized installer {file}; Emotet then stole Outlook mail
+trojan,8,train,TrickBot trojan credential theft after a malicious Excel macro on {ip}
+trojan,9,train,Banking trojan QakBot follow-on from Emotet on workstation {host}
+trojan,10,train,Trojan family Emotet / TrickBot harvesting credentials from {user}
+trojan,11,train,Malicious Office macro installed a banking trojan Emotet on {host}
+trojan,12,train,TrickBot trojanized installer {file} stole Outlook credentials from {user}
+trojan,13,train,QakBot banking trojan follow-on after Emotet loader on {ip}
+trojan,14,train,User opened {file}; trojan TrickBot then harvested credentials
+trojan,15,holdout,User launched {file}; Emotet banking trojan then called C2
+trojan,16,holdout,TrickBot trojan module harvested credentials on {host}
+ransomware,1,train,Your files have been encrypted. Pay bitcoin wallet for decryption key
+ransomware,2,train,LockBit ransomware locked files as .locked and demanded crypto payment
+ransomware,3,train,README_FOR_DECRYPT.txt how to decrypt. Shadow copies deleted on {host}
+ransomware,4,train,Conti ransomware encrypted documents on {ip}. Pay in crypto
+ransomware,5,train,Your files are encrypted. Do not turn off the PC. Bitcoin wallet demanded
+ransomware,6,train,LockBit ransomware dropped {file} then encrypted Documents on {host}
+ransomware,7,train,vssadmin delete shadows then Conti ransomware locked files as .locked
+ransomware,8,train,Ransom note README_FOR_DECRYPT.txt: pay bitcoin wallet for the decryption key
+ransomware,9,train,"Host {host}: files encrypted by LockBit, crypto payment demanded"
+ransomware,10,train,"Desktop note: your files have been encrypted, do not turn off the PC"
+ransomware,11,train,LockBit ransomware encrypted Documents and demanded a bitcoin wallet on {host}
+ransomware,12,train,Conti ransom note {file}: how to decrypt after shadow copies deleted
+ransomware,13,train,Your files are encrypted. Pay crypto for the decryption key. Do not turn off the PC
+ransomware,14,train,vssadmin delete shadows then LockBit locked files as .locked on {ip}
+ransomware,15,holdout,"LockBit note on desktop: files locked, pay crypto for decryption key"
+ransomware,16,holdout,Host {host} hit by Conti ransomware after vssadmin delete shadows
+spyware,1,train,Spyware Pegasus exfiltrating contacts messages location from mobile endpoint
+spyware,2,train,Screen capture spyware stalkerware telemetry to unknown C2
+spyware,3,train,DarkHotel spyware monitoring {user} browser sessions on {host}
+spyware,4,train,Spyware family Pegasus privacy exfiltration of messages and location
+spyware,5,train,Stalkerware WebWatcher uploading screenshots from {ip}
+spyware,6,train,Pegasus spyware privacy exfiltration of contacts and location from the phone
+spyware,7,train,Stalkerware on {host} captured screen telemetry and browser sessions for {user}
+spyware,8,train,DarkHotel spyware plus WebWatcher screenshots uploaded toward {ip}
+spyware,9,train,Mobile spyware Pegasus exfiltrating messages to an unknown C2
+spyware,10,train,Privacy spyware monitoring {user} location and contacts on {host}
+spyware,11,train,Stalkerware WebWatcher screen capture spyware uploading telemetry from {host}
+spyware,12,train,"Pegasus spyware exfiltrating messages, contacts, and location to unknown C2"
+spyware,13,train,DarkHotel spyware monitoring browser sessions and cookies for {user}
+spyware,14,train,Privacy exfiltration spyware on the phone: Pegasus family toward {ip}
+spyware,15,holdout,Pegasus spyware on the phone exfiltrating contacts and location to C2
+spyware,16,holdout,DarkHotel spyware captured {user} session cookies from {host}
+adware,1,train,Adware Bundlore browser hijacker injecting popup ads
+adware,2,train,Unwanted adware detection family Adware.Generic changing homepage
+adware,3,train,SearchProtect adware bundled with freeware on {host}
+adware,4,train,Popup ads injector adware tracking installs for {user}
+adware,5,train,Browser hijacking adware reset search engine to unknown site
+adware,6,train,Bundlore adware injected popup ads after a freeware install on {host}
+adware,7,train,Adware.Generic PUP hijacked the homepage and search engine for {user}
+adware,8,train,SearchProtect adware bundled with {file} then changed Chrome search
+adware,9,train,Unwanted adware tracking installs and injecting popup ads on {ip}
+adware,10,train,Browser hijacker adware Bundlore reset the start page on {host}
+adware,11,train,Adware.Generic changing homepage after freeware bundled with {file}
+adware,12,train,SearchProtect adware injected popup ads and reset the search engine
+adware,13,train,Unwanted PUP adware tracking installs for {user} on {host}
+adware,14,train,Browser hijacking adware Bundlore on {ip} injecting popup ads
+adware,15,holdout,Bundlore adware hijacked Chrome homepage and injected popup ads
+adware,16,holdout,Adware.Generic PUP changed search settings for {user}
+rootkit,1,train,Kernel-mode rootkit TDSS hiding malicious driver
+rootkit,2,train,ZeroAccess rootkit family concealing processes on {host}
+rootkit,3,train,Hidden driver rootkit Alureon surviving ordinary antivirus cleanup
+rootkit,4,train,Rootkit hiding files and processes from Task Manager on {ip}
+rootkit,5,train,TDSS / ZeroAccess kernel-mode rootkit detected in boot record
+rootkit,6,train,Bootkit TDSS kernel-mode rootkit hiding a malicious driver on {host}
+rootkit,7,train,ZeroAccess rootkit concealing processes from Task Manager after reboot
+rootkit,8,train,Alureon hidden driver rootkit survived ordinary antivirus cleanup on {ip}
+rootkit,9,train,Kernel-mode rootkit family TDSS detected in the boot record of {host}
+rootkit,10,train,Rootkit scan: ZeroAccess still hiding files and processes on {ip}
+rootkit,11,train,Kernel-mode rootkit Alureon hiding a malicious driver from Task Manager
+rootkit,12,train,TDSS bootkit in the boot record survived ordinary antivirus cleanup on {host}
+rootkit,13,train,ZeroAccess rootkit family concealing processes after reboot of {ip}
+rootkit,14,train,Hidden driver rootkit TDSS / ZeroAccess detected on {host}
+rootkit,15,holdout,Bootkit scan: TDSS rootkit hiding a malicious kernel driver
+rootkit,16,holdout,ZeroAccess rootkit still concealing processes after reboot of {host}
+botnet,1,train,Mirai IoT botnet recruiting cameras into command-and-control botnet
+botnet,2,train,Botnet bot herder pushing new attack modules to {ip}
+botnet,3,train,Emotet botnet swarm waiting for C2 commands from bot herder
+botnet,4,train,IoT botnet Mirai brute-forcing cameras then joining DDoS swarm
+botnet,5,train,Command-and-control botnet callback from {host}
+botnet,6,train,Mirai IoT botnet brute-forced a camera at {ip} then joined the DDoS swarm
+botnet,7,train,Bot herder pushed a new flood module to the Emotet botnet from C2
+botnet,8,train,Command-and-control botnet callback from {host} after camera recruitment
+botnet,9,train,IoT camera at {ip} recruited into the Mirai botnet with a default password
+botnet,10,train,Emotet botnet swarm waiting for bot herder commands toward {host}
+botnet,11,train,Mirai IoT botnet recruiting cameras into a command-and-control swarm from {ip}
+botnet,12,train,Bot herder pushing attack modules to the Emotet botnet callback on {host}
+botnet,13,train,Default-password camera joined the Mirai botnet then a DDoS swarm
+botnet,14,train,Command-and-control botnet C2 from {host} after IoT recruitment
+botnet,15,holdout,Camera at {ip} joined the Mirai botnet after a default-password login
+botnet,16,holdout,Bot herder issued a new flood module to the Emotet botnet swarm
+keylogger,1,train,Keylogger Agent Tesla keystroke logging sha256:{sha}
+keylogger,2,train,Formbook keylogger captured credentials keylog buffer flushed to C2
+keylogger,3,train,HawkEye keylogger recording typed passwords for {user} on {host}
+keylogger,4,train,Keystroke logging malware Agent Tesla plus clipboard theft
+keylogger,5,train,Keylogger family Formbook shipping captured credentials to {ip}
+keylogger,6,train,Agent Tesla keylogger plus clipboard theft flushed keystrokes to C2
+keylogger,7,train,Formbook keylogger captured {user} banking passwords on {host}
+keylogger,8,train,HawkEye keystroke logging recorded typed passwords then called {ip}
+keylogger,9,train,Keylogger family Agent Tesla sha256:{sha} shipping a keylog buffer
+keylogger,10,train,Clipboard theft keylogger Formbook on {host} for account {user}
+keylogger,11,train,HawkEye keylogger recording typed passwords and shipping a keylog buffer
+keylogger,12,train,Agent Tesla keystroke logging plus clipboard theft sha256:{sha}
+keylogger,13,train,Formbook keylogger flushed captured credentials for {user} to {ip}
+keylogger,14,train,Keylogger family HawkEye on {host} captured banking passwords
+keylogger,15,holdout,Agent Tesla keylogger flushed keystroke logs and clipboard to C2
+keylogger,16,holdout,Formbook keylogger on {host} captured {user} banking passwords
+rat,1,train,Remote access trojan AsyncRAT opened unauthorized remote control session
+rat,2,train,njRAT remote access trojan persistence on workstation {host}
+rat,3,train,Quasar RAT viewing the screen and transferring files from {ip}
+rat,4,train,Unauthorized remote control RAT listener on port {port}
+rat,5,train,Remote Access Trojan AsyncRAT / njRAT / Quasar interactive session
+rat,6,train,AsyncRAT remote access trojan opened an unauthorized desktop session on {host}
+rat,7,train,njRAT persistence then Quasar RAT transferred files from {ip}
+rat,8,train,Unauthorized remote control RAT listener on port {port} viewing the screen
+rat,9,train,Remote access trojan family AsyncRAT interactive session on {host}
+rat,10,train,Quasar RAT moving files off {ip} after an njRAT implant
+rat,11,train,Unauthorized remote control: AsyncRAT viewing the screen on {host}
+rat,12,train,njRAT remote access trojan persistence then file transfer from {ip}
+rat,13,train,Quasar RAT listener on port {port} opened an interactive session
+rat,14,train,Remote Access Trojan family AsyncRAT / njRAT on workstation {host}
+rat,15,holdout,AsyncRAT remote access trojan took the desktop session on {host}
+rat,16,holdout,Quasar RAT listener on port {port} moving files off {ip}
+downloader,1,train,Downloader Guloader stage-2 payload download sha256:{sha}
+downloader,2,train,SmokeLoader dropper downloaded secondary malware executable {file}
+downloader,3,train,Certutil -urlcache downloader fetched stage-2 payload from {ip}
+downloader,4,train,Bitsadmin /transfer living-off-the-land downloader on {host}
+downloader,5,train,Dropper unpacked secondary malware after phishing document {file}
+downloader,6,train,Guloader downloader used certutil -urlcache to fetch stage-2 from {ip}
+downloader,7,train,SmokeLoader dropper on {host} unpacked secondary malware executable {file}
+downloader,8,train,Bitsadmin /transfer living-off-the-land downloader pulled sha256:{sha}
+downloader,9,train,Stage-2 payload downloader Guloader after a phishing document {file}
+downloader,10,train,Dropper family SmokeLoader fetched another executable from {ip}
+downloader,11,train,Certutil -urlcache downloader Guloader fetched stage-2 payload {file}
+downloader,12,train,Bitsadmin living-off-the-land downloader on {host} pulled sha256:{sha}
+downloader,13,train,SmokeLoader dropper downloaded secondary malware after {file}
+downloader,14,train,Stage-2 payload dropper Guloader from {ip} unpacked on {host}
+downloader,15,holdout,Guloader downloader pulled a stage-2 payload with sha256:{sha}
+downloader,16,holdout,SmokeLoader dropper on {host} fetched another executable from {ip}
+backdoor,1,train,Backdoor Cobalt Strike beacon sha256:{sha}
+backdoor,2,train,China Chopper webshell backdoor planted on IIS server {host}
+backdoor,3,train,Persistent backdoor beacon calling C2 every {n} seconds from {ip}
+backdoor,4,train,Cobalt Strike backdoor and webshell on the web root
+backdoor,5,train,Covert long-term access backdoor remaining after cleanup
+backdoor,6,train,Cobalt Strike beacon backdoor on {host} calling C2 every {n} seconds
+backdoor,7,train,China Chopper webshell backdoor planted in the IIS web root
+backdoor,8,train,Persistent covert long-term access backdoor remaining after cleanup on {ip}
+backdoor,9,train,Backdoor family Cobalt Strike hashed sha256:{sha} plus a webshell
+backdoor,10,train,IIS server {host} accepted China Chopper backdoor commands without login
+backdoor,11,train,Persistent Cobalt Strike beacon backdoor calling C2 from {ip} every {n} seconds
+backdoor,12,train,China Chopper webshell backdoor planted on the IIS web root of {host}
+backdoor,13,train,"Covert long-term access backdoor remaining after cleanup, sha256:{sha}"
+backdoor,14,train,Cobalt Strike backdoor plus webshell on {host} accepted commands without login
+backdoor,15,holdout,Cobalt Strike beacon backdoor hashed sha256:{sha} on {host}
+backdoor,16,holdout,China Chopper webshell backdoor accepted commands without login
+fileless,1,train,Fileless PowerShell Empire living-off-the-land in-memory payload
+fileless,2,train,WMI persistence fileless technique with in-memory shellcode on {host}
+fileless,3,train,PowerShell -EncodedCommand fileless living-off-the-land on {ip}
+fileless,4,train,Fileless malware runs in memory via WMI and PowerShell Empire
+fileless,5,train,LotL fileless in-memory payload with no dropped EXE
+fileless,6,train,PowerShell Empire fileless living-off-the-land in-memory payload on {host}
+fileless,7,train,"WMI persistence plus encoded PowerShell fileless implant, no dropped EXE"
+fileless,8,train,Fileless malware: PowerShell -EncodedCommand in-memory shellcode on {ip}
+fileless,9,train,LotL fileless technique using WMI and PowerShell Empire in memory
+fileless,10,train,In-memory fileless payload with living-off-the-land PowerShell on {host}
+fileless,11,train,"Fileless WMI persistence with in-memory shellcode, no dropped EXE on {host}"
+fileless,12,train,PowerShell -EncodedCommand living-off-the-land fileless implant on {ip}
+fileless,13,train,LotL fileless malware: PowerShell Empire in memory via WMI
+fileless,14,train,Fileless in-memory payload Empire with encoded PowerShell on {host}
+fileless,15,holdout,PowerShell Empire fileless in-memory payload with WMI persistence
+fileless,16,holdout,Encoded PowerShell living-off-the-land fileless implant on {host}
+cryptominer,1,train,Cryptominer XMRig unauthorized mining sha256:{sha}
+cryptominer,2,train,Lemon Duck coinminer Monero mining on compromised host {host}
+cryptominer,3,train,Unauthorized mining pool stratum+tcp from {ip} XMRig process
+cryptominer,4,train,Cryptominer hijacking CPU/GPU for Monero mining on {host}
+cryptominer,5,train,NiceHash / XMRig miner binary filename in {file}
+cryptominer,6,train,XMRig cryptominer unauthorized mining to a Monero pool from {ip}
+cryptominer,7,train,Lemon Duck coinminer caused high CPU on {host} during Monero mining
+cryptominer,8,train,stratum+tcp unauthorized mining pool from XMRig process sha256:{sha}
+cryptominer,9,train,Cryptominer NiceHash / XMRig binary {file} hijacking CPU/GPU
+cryptominer,10,train,Coinminer Lemon Duck unauthorized mining on compromised host {host}
+cryptominer,11,train,XMRig cryptominer hijacking CPU/GPU for Monero mining sha256:{sha}
+cryptominer,12,train,Unauthorized mining pool stratum+tcp NiceHash from {ip} on {host}
+cryptominer,13,train,Lemon Duck coinminer binary {file} caused high CPU during mining
+cryptominer,14,train,"Cryptominer XMRig connected to a Monero pool, unauthorized mining"
+cryptominer,15,holdout,XMRig cryptominer connected to a Monero pool from {ip}
+cryptominer,16,holdout,Lemon Duck coinminer caused high CPU on {host} during unauthorized mining
+malware,1,train,Executable download of suspicious malware with registry persistence on {host}
+malware,2,train,PowerShell -enc base64 payload launched reverse shell to C2 beacon
+malware,3,train,Generic malware double extension dropper {file} with DLL injection
+malware,4,train,Suspicious process malware and C2 beacon from {ip}
+malware,5,train,Lure filename on dangerous attachment {file} classified as malware
+malware,6,train,Malware dropper {file} used DLL injection and registry persistence on {host}
+malware,7,train,Reverse shell malware: PowerShell -enc base64 payload to a C2 beacon
+malware,8,train,Suspicious malware executable download then C2 beacon from {ip}
+malware,9,train,Double extension dropper {file} classified as generic malware
+malware,10,train,Dangerous attachment {file} launched malware with registry persistence
+malware,11,train,Generic malware double extension {file} plus DLL injection on {host}
+malware,12,train,Suspicious process malware launched a reverse shell C2 beacon from {ip}
+malware,13,train,PowerShell -enc base64 malware payload with registry persistence
+malware,14,train,Lure attachment {file} classified as malware after executable download
+malware,15,holdout,Malware dropper {file} used DLL injection and registry persistence
+malware,16,holdout,Reverse shell malware with PowerShell -enc base64 payload to C2 beacon
+ddos,1,train,DDoS SYN flood exhausting bandwidth capacity on edge firewall
+ddos,2,train,HTTP flood denial of service against public web portal at {ip}
+ddos,3,train,UDP flood distributed denial of service from botnet sources
+ddos,4,train,Traffic flood exhausting capacity and denying availability
+ddos,5,train,SYN/UDP/HTTP floods DDoS against {host}
+ddos,6,train,Edge firewall DDoS: SYN flood exhausting bandwidth capacity toward {host}
+ddos,7,train,HTTP flood denial of service against the public web portal at {ip}
+ddos,8,train,UDP flood distributed denial of service from botnet sources hitting {host}
+ddos,9,train,Traffic flood exhausting capacity and denying availability on the edge firewall
+ddos,10,train,SYN/UDP/HTTP DDoS floods against {host} from botnet sources
+ddos,11,train,Distributed denial of service UDP flood exhausting capacity on {host}
+ddos,12,train,"HTTP flood DDoS against the public web portal, denying availability"
+ddos,13,train,Edge firewall SYN flood DDoS from botnet sources toward {ip}
+ddos,14,train,Traffic flood DDoS: SYN/UDP/HTTP exhausting bandwidth capacity
+ddos,15,holdout,Edge firewall: DDoS SYN flood exhausted bandwidth capacity
+ddos,16,holdout,Portal at {ip} hit by HTTP flood denial of service
+brute-force,1,train,Repeated login attempts and password spray against VPN gateway {ip}
+brute-force,2,train,SSH auth failures indicate brute force password guessing on port {port}
+brute-force,3,train,RDP login failures credential stuffing against {host}
+brute-force,4,train,Brute force password spray of account {user} from {ip}
+brute-force,5,train,Failed authentication burst then successful brute-force login
+brute-force,6,train,VPN gateway {ip} password spray: repeated login attempts for {user}
+brute-force,7,train,RDP credential stuffing and login failures against {host} from {ip}
+brute-force,8,train,SSH brute force password guessing on port {port} then a successful login
+brute-force,9,train,Failed authentication burst: brute force against account {user} on {host}
+brute-force,10,train,Password spray brute force of the VPN gateway from {ip}
+brute-force,11,train,SSH auth failures brute force password guessing then a successful login on {host}
+brute-force,12,train,RDP login failures: credential stuffing and password spray against {user}
+brute-force,13,train,Failed authentication burst brute-force of VPN gateway {ip} on port {port}
+brute-force,14,train,Repeated login attempts indicate brute force against {host} from {ip}
+brute-force,15,holdout,VPN gateway {ip} under password spray brute force against {user}
+brute-force,16,holdout,RDP brute force: repeated login attempts and credential stuffing on {host}
+social,1,train,Social engineering call impersonating help desk scam for MFA codes
+social,2,train,CEO fraud email asking staff to wire transfer urgently for {user}
+social,3,train,Help-desk scam impersonation requesting gift card purchase
+social,4,train,Social engineering pretends to be IT and manipulates employee for MFA
+social,5,train,Urgent wire transfer social engineering impersonating the director
+social,6,train,Help desk scam social engineering asked {user} for an MFA code on a call
+social,7,train,"CEO fraud: wire transfer urgently and do not tell finance, impersonating IT"
+social,8,train,Social engineering gift-card purchase after a help-desk impersonation
+social,9,train,Director impersonation social engineering for an urgent wire transfer
+social,10,train,Pretends to be IT: social engineering call harvesting MFA from {user}
+social,11,train,Help-desk impersonation social engineering requesting a gift card purchase
+social,12,train,"CEO fraud social engineering: urgent wire transfer, do not tell finance"
+social,13,train,Social engineering call pretends to be IT and asks {user} for MFA codes
+social,14,train,Director impersonation: wire transfer urgently after a help desk scam
+social,15,holdout,Help desk scam social engineering asked {user} for an MFA code
+social,16,holdout,"CEO fraud social engineering: wire transfer urgently, do not tell finance"
+benign,1,train,Normal outbound HTTPS traffic to corporate CDN from {host}
+benign,2,train,Scheduled backup completed successfully on file server {ip}
+benign,3,train,DNS lookup for known software update domain by {user}
+benign,4,train,Employee joined a video conference meeting on {host}
+benign,5,train,Weekly project notes are in the shared drive. No password reset is required
+benign,6,train,Windows Update installed successfully. Reboot is not required now
+benign,7,train,Printer queue cleared. User {user} printed 3 pages
+benign,8,train,NTP time sync succeeded. Host {host} clock is correct
+benign,9,train,SCCM patch Tuesday reboot completed successfully on {host}
+benign,10,train,Defender definition update succeeded. No threats on {ip}
+benign,11,train,{user} saved meeting notes {file} to Documents on {host}
+benign,12,train,Normal outbound HTTPS to the corporate CDN. Weekly notes on the shared drive
+benign,13,train,Scheduled backup and NTP time sync succeeded on file server {ip}
+benign,14,train,Employee joined a video conference. Windows Update installed successfully
+benign,15,train,Printer queue cleared. {user} printed pages. No password reset is required
+benign,16,train,DNS lookup for a known software update domain from {host} by {user}
+benign,17,holdout,Intranet wiki saved. {user} edited the meeting agenda on {host}
+benign,18,holdout,Software inventory scan finished with no threats on {ip}
