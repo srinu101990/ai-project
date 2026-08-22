@@ -608,6 +608,38 @@ def preview_corpus(
     return rows
 
 
+def write_full_corpus_csv(
+    path,
+    *,
+    per_class: int = 20000,
+    seed: int = 42,
+    holdout: int = 2,
+) -> dict[str, int]:
+    """Materialize the same generated split the v4 trainer uses."""
+    import csv
+    from collections import Counter
+    from pathlib import Path
+
+    texts, labels, splits = build_template_split(
+        per_class=per_class, seed=seed, holdout=holdout
+    )
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["split", "threat_type", "event_text"])
+        writer.writeheader()
+        for text, label, split in zip(texts, labels, splits):
+            writer.writerow({"split": split, "threat_type": label, "event_text": text})
+    split_counts = Counter(splits)
+    return {
+        "total_rows": len(texts),
+        "train_rows": int(split_counts.get("train", 0)),
+        "test_rows": int(split_counts.get("test", 0)),
+        "classes": len(set(labels)),
+        "per_class_train": per_class,
+    }
+
+
 def template_catalog() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for threat_type, templates in TEMPLATES.items():

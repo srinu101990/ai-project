@@ -1,40 +1,36 @@
 # Training dataset (CYBER_SENTINEL.AI)
 
-This is the **generated** SOC-style corpus used to train the local v4 classifier
-(TF-IDF + Logistic Regression). It is **not** a public 1-billion-row download.
+Two different sizes. Do not mix them up.
 
-## Files
+| File | Row count | What it is |
+|---|---|---|
+| `threat_corpus_sample.csv` | **2,200 data + 1 header = 2,201 lines** | Small Excel sample for viva |
+| `templates_by_class.csv` | one row per wording template | Train vs holdout templates |
+| `corpus_counts.csv` | count table | Official numbers |
+| `threat_corpus_full.csv` | **450,000 data + 1 header = 450,001 lines** | Full generated train+test. **Not in git** — you build it with the command below |
 
-| File | What it is |
-|---|---|
-| `threat_corpus_sample.csv` | 2,200 labeled events: 100 train + 10 holdout rows per class. Open in Excel. |
-| `templates_by_class.csv` | Every wording template. Last two templates per class are holdout. |
+The screenshots say **400,000** because that is the **train** size used by the model
+(20,000 rows × 20 classes). The full CSV also has **50,000** holdout test rows,
+so the file you count will be **450,001 lines**.
 
-The production model was trained on **400,000** generated train events
-(20,000 per class) and scored on **50,000** held-out-template events.
-
-Regenerate the sample and screenshots from `backend/`:
-
-```bat
-python -m scripts.export_dataset_and_shots
-```
-
-Regenerate the full model:
+## Build the 400,000-train file on your laptop
 
 ```bat
-python -m scripts.train_threat_model 20000
+cd %USERPROFILE%\Desktop\CYBER_SENTINEL
+git pull origin cursor/laptop-phishing-mail-cd50
+cd backend
+py -3 -m scripts.export_full_corpus
+find /c /v "" ..\docs\dataset\threat_corpus_full.csv
+explorer ..\docs\dataset
 ```
 
-## Columns
+`find /c /v ""` prints the line count. Expect **450001**.
 
-`threat_corpus_sample.csv`
-
-- `split` — `train` or `test` (test = held-out last-two templates)
-- `threat_type` — one of the 20 project classes
-- `event_text` — generated alert / mail / host text
+That command generates the same SOC-style text the trainer used. It is **not** a
+public 1-billion-row internet download.
 
 ## Honesty for viva
 
-Holdout wordings still use the same family names (LockBit, Emotet, WannaCry).
-A high score here is not a claim of perfect real-world detection.
-The live dashboard still uses regex rules plus this local model.
+- `2201` in the sample file is correct. That file was always a sample.
+- `400000` in the screenshots is the in-memory train size, not the sample CSV.
+- Holdout text still uses the same family names. 100% is not perfect real-world detection.

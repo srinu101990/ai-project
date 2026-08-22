@@ -21,12 +21,24 @@ class TrainingDatasetTests(unittest.TestCase):
         self.assertTrue(any(row["role"] == "holdout" for row in rows))
         self.assertGreaterEqual(len(rows), 40)
 
+    def test_full_export_matches_trainer_split(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from app.training_data import write_full_corpus_csv
+
+        with TemporaryDirectory() as tmp:
+            stats = write_full_corpus_csv(Path(tmp) / "full.csv", per_class=20)
+        self.assertEqual(stats["train_rows"], 20 * len(THREAT_TYPES))
+        self.assertEqual(stats["test_rows"], 150 * len(THREAT_TYPES))
+        self.assertEqual(stats["total_rows"], stats["train_rows"] + stats["test_rows"])
+
     def test_dataset_api_returns_sample_and_metrics(self) -> None:
         payload = classifier_dataset()
         self.assertIn("sample_rows", payload)
         self.assertIn("metrics", payload)
         self.assertGreaterEqual(len(payload["sample_rows"]), 20)
-        self.assertIn("Generated", payload["honesty"])
+        self.assertIn("2,200", payload["honesty"])
 
 
 if __name__ == "__main__":

@@ -139,7 +139,7 @@ def shot_dataset_preview(rows: list[dict[str, str]]) -> None:
     _header(
         draw,
         "Generated training dataset (sample)",
-        "docs/dataset/threat_corpus_sample.csv  —  100 train + 10 holdout rows per class (2,200 rows). Full model train is 400,000 rows.",
+        "THIS FILE = 2,200 data rows (2,201 lines with header). 400,000 is the in-memory TRAIN size — run python -m scripts.export_full_corpus",
     )
     col_font = _font("DejaVuSans-Bold.ttf", 15)
     cell_font = _font("DejaVuSansMono.ttf", 14)

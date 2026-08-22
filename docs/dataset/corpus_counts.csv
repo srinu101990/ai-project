@@ -1,0 +1,7 @@
+item,rows
+sample_csv_data_rows,2200
+sample_csv_lines_with_header,2201
+full_train_rows,400000
+full_holdout_test_rows,50000
+full_csv_data_rows,450000
+full_csv_lines_with_header,450001

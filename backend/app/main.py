@@ -694,9 +694,9 @@ def classifier_dataset():
     metrics = load_model_metrics()
     return {
         "honesty": (
-            "Generated SOC-style event text for this project's 20 threat types. "
-            "The CSV in docs/dataset is a sample. The full train set is 400,000 "
-            "generated rows — not a public 1-billion-row download."
+            "docs/dataset/threat_corpus_sample.csv has 2,200 data rows (2,201 lines "
+            "with the header). The screenshots' 400,000 is the in-memory train size. "
+            "Build the full CSV with: python -m scripts.export_full_corpus"
         ),
         "algorithm": "TF-IDF (1-2 grams) + Logistic Regression",
         "metrics": metrics,

@@ -3,6 +3,10 @@
 These stills were generated from the **real v4 metrics** and a sample of the
 generated corpus (`python -m scripts.export_dataset_and_shots`).
 
+`01_dataset_preview.png` is the **2,200-row sample CSV**. The **400,000** number
+is the in-memory train size. Build the full file with
+`python -m scripts.export_full_corpus` (450,001 lines including the header).
+
 sklearn has no neural-net epoch bar. The “training in progress” frame shows the
 actual four steps: build corpus → TF-IDF → Logistic Regression → holdout score.
 

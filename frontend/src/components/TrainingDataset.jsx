@@ -33,9 +33,13 @@ export default function TrainingDataset() {
       {error ? <p className="muted">{error}</p> : null}
       <p className="muted" style={{ marginTop: 0 }}>
         {data?.honesty ||
-          'Sample of the generated training text. The full train set is 400,000 generated rows, not a public download.'}
+          'Excel sample CSV = 2,200 rows. Screenshots 400,000 = in-memory train size. Run python -m scripts.export_full_corpus to write the full file.'}
       </p>
       <div className="snapshot-grid">
+        <div>
+          <div className="stat-label">Excel sample CSV</div>
+          <div className="stat-value">2,200</div>
+        </div>
         <div>
           <div className="stat-label">Train events</div>
           <div className="stat-value">{metrics.train_samples?.toLocaleString?.() || '—'}</div>
